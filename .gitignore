@@ -27,3 +27,11 @@
 *.exe
 *.out
 *.app
+
+# Projects conf
+*.user
+*.kdev4
+
+# Directories
+build/
+stuff/
