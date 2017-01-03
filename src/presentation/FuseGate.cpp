@@ -1,5 +1,5 @@
 #include "handler.h"
-#include "FuseDrive.h"
+#include "FuseGate.h"
 #include "utils/log.h"
 #include "utils/ExponentialBackoff.h"
 #include <googleapis/client/data/data_reader.h>
@@ -223,14 +223,14 @@ private:
 	g_cli::AuthorizationCredential *_authCred=nullptr;
 };
 
-FuseDrive::FuseDrive(g_drv::DriveService &service, googleapis::client::AuthorizationCredential *authCred, const boost::filesystem::path &workDir)
+FuseGate::FuseGate(g_drv::DriveService &service, googleapis::client::AuthorizationCredential *authCred, const boost::filesystem::path &workDir)
 	: _service(service),
 	  _workDir(workDir),
 	  _authCred(authCred)
 {
 }
 
-int FuseDrive::run(const FUSEOpts &fuseOpts)
+int FuseGate::run(const FUSEOpts &fuseOpts)
 {
 	fuse_args args=FUSE_ARGS_INIT(0,NULL);
 	fuse_opt_add_arg(&args,G2F_APP_NAME);
@@ -256,22 +256,22 @@ int FuseDrive::run(const FUSEOpts &fuseOpts)
 	return fuse_main(args.argc, args.argv, &g2f_oper, this);
 }
 
-Node *FuseDrive::getMeta(const char *path)
+Node *FuseGate::getMeta(const char *path)
 {
 	return _tree.get(path);
 }
 
-Tree &FuseDrive::metaTree()
+Tree &FuseGate::metaTree()
 {
 	return _tree;
 }
 
-Tree::IDirectoryIteratorUPtr FuseDrive::getDirectoryIterator(Node *meta)
+Tree::IDirectoryIteratorUPtr FuseGate::getDirectoryIterator(Node *meta)
 {
 	return Tree::IDirectoryIteratorUPtr(_tree.getDirectoryIterator(meta));
 }
 
-int FuseDrive::fuseHelp()
+int FuseGate::fuseHelp()
 {
 	fuse_args args=FUSE_ARGS_INIT(0,NULL);
 	fuse_opt_add_arg(&args,G2F_APP_NAME);
@@ -281,7 +281,7 @@ int FuseDrive::fuseHelp()
 	return fuse_main(args.argc, args.argv, &ops, 0);
 }
 
-int FuseDrive::openContent(Node *meta, int flags, uint64_t &fd)
+int FuseGate::openContent(Node *meta, int flags, uint64_t &fd)
 {
 	try
 	{
@@ -298,7 +298,7 @@ int FuseDrive::openContent(Node *meta, int flags, uint64_t &fd)
 	return 0;
 }
 
-int FuseDrive::readContent(uint64_t fd, char *buf, size_t len, off_t offset)
+int FuseGate::readContent(uint64_t fd, char *buf, size_t len, off_t offset)
 {
 	try
 	{
@@ -315,7 +315,7 @@ int FuseDrive::readContent(uint64_t fd, char *buf, size_t len, off_t offset)
 	return 0;
 }
 
-int FuseDrive::closeContent(uint64_t fd)
+int FuseGate::closeContent(uint64_t fd)
 {
 	try
 	{

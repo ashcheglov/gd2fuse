@@ -1,5 +1,4 @@
-#ifndef G2FEXCEPTION_H
-#define G2FEXCEPTION_H
+#pragma once
 
 #include <string>
 #include <list>
@@ -59,4 +58,3 @@ private:
 
 #define G2F_EXCEPTION_GSTATUS(message,status) G2F_EXCEPTION(message).reason(status.error_message())
 
-#endif // G2FEXCEPTION_H

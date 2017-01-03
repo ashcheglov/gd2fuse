@@ -1,5 +1,4 @@
-#ifndef FUSEOPTS_H
-#define FUSEOPTS_H
+#pragma once
 
 #include "utils/decls.h"
 #include <string>
@@ -21,4 +20,3 @@ struct FUSEOpts
 	O0oList ooo;
 };
 
-#endif // FUSEOPTS_H

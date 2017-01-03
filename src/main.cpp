@@ -5,7 +5,7 @@
 #include "utils/Enum.h"
 #include <boost/program_options.hpp>
 #include <boost/filesystem.hpp>
-#include "Application.h"
+#include "control/Application.h"
 
 namespace po=boost::program_options;
 using namespace std;
@@ -54,7 +54,6 @@ FUSEOpts& readFUSEopts(const po::variables_map& vm,FUSEOpts& opts)
 int main(int argc, char *argv[])
 {
 	G2F_LOG_INIT();
-	typedef vector<string> Strings;
 	Enum<Action> action(Service);
 	fs::path confPath;
 	std::string authCode;

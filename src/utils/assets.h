@@ -1,5 +1,4 @@
-#ifndef ASSETS_H
-#define ASSETS_H
+#pragma once
 
 #include <string>
 #include <array>
@@ -34,4 +33,3 @@ namespace boost { namespace filesystem { namespace path_traits {
 */
 fs::path fromPathIt(const fs::path::const_iterator &begin,const fs::path::const_iterator &end);
 
-#endif // ASSETS_H

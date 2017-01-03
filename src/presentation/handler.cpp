@@ -1,5 +1,5 @@
 #include "utils/log.h"
-#include "FuseDrive.h"
+#include "FuseGate.h"
 #include "handler.h"
 #include <ctype.h>
 #include <dirent.h>
@@ -14,7 +14,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 
-#define G2F_DATA (static_cast<FuseDrive*>(fuse_get_context()->private_data))
+#define G2F_DATA (static_cast<FuseGate*>(fuse_get_context()->private_data))
 #define NODEPTR_TO_FH(nptr, fh) (fh=reinterpret_cast<int64_t>(nptr))
 #define FH_TO_NODEPTR(fh, nptr) (nptr=reinterpret_cast<Node*>(fh))
 

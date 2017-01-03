@@ -1,10 +1,10 @@
-#ifndef CACHE_H
-#define CACHE_H
+#pragma once
 
 #include "utils/decls.h"
 #include <boost/unordered_map.hpp>
-#include "Meta.h"
 #include <boost/thread/shared_mutex.hpp>
+
+class Node;
 
 // TODO Implement LRU cache
 class Cache
@@ -26,4 +26,3 @@ private:
 	IdNodes _idNodes;
 };
 
-#endif // CACHE_H

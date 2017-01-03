@@ -1,5 +1,4 @@
-#ifndef __ENUM_HPP__
-#define __ENUM_HPP__
+#pragma once
 
 #include <climits>
 #include <cstring>
@@ -433,5 +432,3 @@ template<> std::pair<size_t,const EnumMapItem<EnumType>* > Enum<EnumType>::getMa
 #define END_ENUM_MAP_C \
 END_ENUM_MAP
 
-
-#endif //__ENUM_HPP__

@@ -22,23 +22,26 @@ find_package(Boost COMPONENTS ${G2F_BOOST_COMPONENTS})
 
 set(SRC_LIST	main.cpp
                 config.h
-                Application.h
-                Application.cpp
 
-                auth/Auth.h
-                auth/Auth.cpp
+                cache/Cache.h
+                cache/Cache.cpp
 
-                drive/Cache.h
-                drive/Cache.cpp
-                drive/ContentManager.h
-                drive/ContentManager.cpp
-                drive/FuseDrive.h
-                drive/FuseDrive.cpp
-                drive/FuseOpts.h
-                drive/handler.cpp
-                drive/handler.h
-                drive/Meta.h
-                drive/Meta.cpp
+                control/Application.h
+                control/Application.cpp
+                control/FuseOpts.h
+
+                data/ContentManager.h
+                data/ContentManager.cpp
+                data/Data.h
+                data/Data.cpp
+
+                presentation/FuseGate.h
+                presentation/FuseGate.cpp
+                presentation/handler.cpp
+                presentation/handler.h
+
+                providers/google/Auth.h
+                providers/google/Auth.cpp
 
                 error/appError.h
                 error/appError.cpp

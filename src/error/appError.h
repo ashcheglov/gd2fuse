@@ -1,5 +1,4 @@
-#ifndef APPERROR_H
-#define APPERROR_H
+#pragma once
 
 #include "utils/decls.h"
 #include <boost/system/error_code.hpp>
@@ -67,4 +66,3 @@ private:
 	std::string _detail;
 };
 
-#endif // APPERROR_H

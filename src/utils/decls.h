@@ -1,5 +1,4 @@
-#ifndef HELPER_H
-#define HELPER_H
+#pragma once
 
 #include <memory>
 #include <boost/filesystem.hpp>
@@ -23,4 +22,3 @@ namespace fs=boost::filesystem;
 // Stub for localization
 #define G2FMESSAGE(message) message
 
-#endif // HELPER_H

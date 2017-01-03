@@ -1,5 +1,4 @@
-#ifndef META_H
-#define META_H
+#pragma once
 
 #include "utils/decls.h"
 #include "utils/assets.h"
@@ -93,5 +92,3 @@ private:
 	IMetaSource *_metaSource=0;
 };
 G2F_DECLARE_PTR(Tree);
-
-#endif // META_H

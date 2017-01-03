@@ -1,5 +1,4 @@
-#ifndef CONTENTMANAGER_H
-#define CONTENTMANAGER_H
+#pragma once
 
 #include "utils/decls.h"
 #include "error/appError.h"
@@ -35,4 +34,3 @@ private:
 	IContentSource *_cSource=nullptr;
 };
 
-#endif // CONTENTMANAGER_H

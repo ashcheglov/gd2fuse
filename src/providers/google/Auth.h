@@ -1,5 +1,4 @@
-#ifndef AUTH_H
-#define AUTH_H
+#pragma once
 
 #include <boost/filesystem.hpp>
 #include "utils/decls.h"
@@ -30,4 +29,3 @@ private:
 	sptr<Impl> _impl;
 };
 
-#endif // AUTH_H

@@ -1,5 +1,4 @@
-#ifndef PATHMANAGER_H
-#define PATHMANAGER_H
+#pragma once
 
 #include "decls.h"
 #include <boost/filesystem.hpp>
@@ -21,5 +20,3 @@ public:
 G2F_DECLARE_PTR(IPathManager);
 
 IPathManagerPtr createDefaultPathMapping(const fs::path *rootDir=0);
-
-#endif // PATHMANAGER_H

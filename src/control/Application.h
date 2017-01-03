@@ -1,9 +1,8 @@
-#ifndef APPLICATION_H
-#define APPLICATION_H
+#pragma once
 
 #include "utils/decls.h"
 #include "utils/PathManager.h"
-#include "drive/FuseOpts.h"
+#include "FuseOpts.h"
 #include <googleapis/client/transport/http_transport.h>
 #include <google/drive_api/drive_service.h>
 
@@ -60,4 +59,3 @@ private:
 
 };
 
-#endif // APPLICATION_H

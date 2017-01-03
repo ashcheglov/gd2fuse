@@ -1,5 +1,4 @@
-#ifndef EXPONENTIALBACKOFF_H
-#define EXPONENTIALBACKOFF_H
+#pragma once
 
 #include <random>
 
@@ -18,4 +17,3 @@ private:
 	size_t _curr;
 };
 
-#endif // EXPONENTIALBACKOFF_H

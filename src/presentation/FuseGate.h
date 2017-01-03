@@ -1,11 +1,10 @@
-#ifndef FUSEDRIVE_H
-#define FUSEDRIVE_H
+#pragma once
 
 #include "utils/decls.h"
-#include "FuseOpts.h"
-#include "Meta.h"
-#include "Cache.h"
-#include "ContentManager.h"
+#include "control/FuseOpts.h"
+#include "data/Data.h"
+#include "cache/Cache.h"
+#include "data/ContentManager.h"
 #include <googleapis/client/transport/http_authorization.h>
 #include <google/drive_api/drive_service.h>
 #include "error/appError.h"
@@ -16,10 +15,10 @@ namespace g_drv=google_drive_api;
 
 class GoogleSource;
 
-class FuseDrive
+class FuseGate
 {
 public:
-	FuseDrive(g_drv::DriveService &service,g_cli::AuthorizationCredential *authCred,const fs::path& workDir);
+	FuseGate(g_drv::DriveService &service,g_cli::AuthorizationCredential *authCred,const fs::path& workDir);
 	int run(const FUSEOpts &fuseOpts);
 
 	Node *getMeta(const char *path);
@@ -42,4 +41,3 @@ private:
 	sptr<GoogleSource> _googleSource;
 };
 
-#endif // FUSEDRIVE_H

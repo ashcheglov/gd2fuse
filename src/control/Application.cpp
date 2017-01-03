@@ -1,7 +1,7 @@
 #include "Application.h"
 #include "error/G2FException.h"
-#include "auth/Auth.h"
-#include "drive/FuseDrive.h"
+#include "providers/google/Auth.h"
+#include "presentation/FuseGate.h"
 #include <googleapis/client/util/status.h>
 #include <googleapis/client/transport/curl_http_transport.h>
 #include <googleapis/client/transport/http_request_batch.h>
@@ -60,13 +60,13 @@ int Application::fuseStart(const FUSEOpts &opts)
 	a.setErrorCallback();
 	OAuth2CredentialPtr oa2c=a.auth(_email,pathManager().credentialHomeDir());
 
-	FuseDrive drive(driveService(),oa2c.get(),pathManager().cacheDir(_email));
+	FuseGate drive(driveService(),oa2c.get(),pathManager().cacheDir(_email));
 	return drive.run(opts);
 }
 
 int Application::fuseHelp()
 {
-	FuseDrive::fuseHelp();
+	FuseGate::fuseHelp();
 	return 0;
 }
 

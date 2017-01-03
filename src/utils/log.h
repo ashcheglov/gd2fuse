@@ -1,5 +1,4 @@
-#ifndef LOG_H
-#define LOG_H
+#pragma once
 
 #ifdef G2F_USE_LOG
 
@@ -42,4 +41,3 @@ BOOST_LOG_GLOBAL_LOGGER(g2flog,logging::sources::logger_mt)
 
 #endif	//	G2F_USE_LOG
 
-#endif	//	LOG_H
