@@ -31,7 +31,11 @@
 # Projects conf
 *.user
 *.kdev4
+*.autosave
 
 # Directories
 build/
 stuff/
+
+# Temporary files
+*~
