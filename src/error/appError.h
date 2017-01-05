@@ -14,7 +14,9 @@ enum G2FErrorCodes
 	HttpClientError,
 	HttpServerError,
 	HttpPermissionError,
-	HttpTimeoutError
+	HttpTimeoutError,
+	NotImplemented,
+	CouldntDetermineProvider
 };
 
 namespace boost

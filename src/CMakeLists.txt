@@ -40,8 +40,24 @@ set(SRC_LIST	main.cpp
                 presentation/handler.cpp
                 presentation/handler.h
 
+                providers/IConversionDescription.h
+                providers/IConversionIterator.h
+                providers/IConvertFormat.h
+                providers/IDataProvider.h
+                providers/IDataReader.h
+                providers/IIdList.h
+                providers/IMetaWrapper.h
+                providers/IOAuth2Process.h
+                providers/IProvider.h
+                providers/IProviderSession.h
+                providers/ISupportedConversion.h
+                providers/ProvidersRegistry.cpp
+                providers/ProvidersRegistry.h
+
                 providers/google/Auth.h
                 providers/google/Auth.cpp
+                providers/google/GoogleProvider.cpp
+                providers/google/GoogleProvider.h
 
                 error/appError.h
                 error/appError.cpp

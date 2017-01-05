@@ -11,14 +11,9 @@ using uptr=std::unique_ptr<T>;
 template<typename T>
 using sptr=std::shared_ptr<T>;
 
-#define G2F_GOOGLE_NS_SHORTHANDS namespace g_api=googleapis; \
-	namespace g_cli=googleapis::client; \
-	namespace g_utl=googleapis::util;
-
-namespace fs=boost::filesystem;
-
 #define G2F_APP_NAME	"gd2fuse"
 
 // Stub for localization
 #define G2FMESSAGE(message) message
 
+namespace fs=boost::filesystem;

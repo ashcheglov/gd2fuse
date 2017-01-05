@@ -42,13 +42,13 @@ public:
 	{
 		return _name;
 	}
-	void setFileType(FileType type)
+	void setFileType(IMetaWrapper::FileType type)
 	{
 		_fileType=type;
 	}
 	bool isFolder() const
 	{
-		return _fileType==FileType::Directory;
+		return _fileType==IMetaWrapper::FileType::Directory;
 	}
 	size_t size() const
 	{
@@ -94,42 +94,42 @@ public:
 		_md5=md5;
 	}
 
-	void setTime(TimeAttrib what,const timespec &value)
+	void setTime(IMetaWrapper::TimeAttrib what,const timespec &value)
 	{
 		timespec *p=&_lastAccess;
 		switch(what)
 		{
-		case ModificationTime:
+		case IMetaWrapper::TimeAttrib::ModificationTime:
 			p=&_lastModification;
 			break;
-		case ChangeTime:
+		case IMetaWrapper::TimeAttrib::ChangeTime:
 			p=&_lastChange;
 			break;
 		}
 		*p=value;
 	}
-	const timespec &time(TimeAttrib what) const
+	const timespec &time(IMetaWrapper::TimeAttrib what) const
 	{
 		switch(what)
 		{
-		case ModificationTime:
+		case IMetaWrapper::TimeAttrib::ModificationTime:
 			return _lastModification;
 			break;
-		case ChangeTime:
+		case IMetaWrapper::TimeAttrib::ChangeTime:
 			return _lastChange;
 			break;
 		}
 		return _lastAccess;
 	}
-	void clearTime(TimeAttrib what)
+	void clearTime(IMetaWrapper::TimeAttrib what)
 	{
 		timespec *p=&_lastAccess;
 		switch(what)
 		{
-		case ModificationTime:
+		case IMetaWrapper::TimeAttrib::ModificationTime:
 			p=&_lastModification;
 			break;
-		case ChangeTime:
+		case IMetaWrapper::TimeAttrib::ChangeTime:
 			p=&_lastChange;
 			break;
 		}
@@ -165,7 +165,7 @@ private:
 	std::string _id;
 	fs::path _name;
 	size_t _size = 0;
-	FileType _fileType=FileType::Binary;
+	IMetaWrapper::FileType _fileType=IMetaWrapper::FileType::Binary;
 	MD5Signature _md5;
 	Node *_parent=0;
 
@@ -182,7 +182,7 @@ private:
 
 
 
-class FileSink : public Tree::IMetaSource::IFileWrapper
+class FileSink : public IMetaWrapper
 {
 public:
 	FileSink(Node *node=nullptr)
@@ -195,6 +195,7 @@ public:
 
 	// IFileWrapper interface
 public:
+
 	virtual void setFileType(FileType value) override
 	{
 		_node->setFileType(value);
@@ -219,6 +220,18 @@ public:
 	{
 		_node->setTime(what,value);
 	}
+	virtual void setMime(const std::string &value) override
+	{
+		// TODO Implement
+	}
+	virtual void isEditable(bool value) override
+	{
+		// TODO Implement
+	}
+	virtual void setSupportedConversions(const IConvertFormatPtr &convs) override
+	{
+		// TODO Implement
+	}
 
 private:
 	Node *_node=nullptr;
@@ -233,9 +246,9 @@ Tree::Tree()
 	_cache.reset(new Cache);
 }
 
-void Tree::setMetaCallback(Tree::IMetaSource *source)
+void Tree::setDataProvider(const IDataProviderPtr &provider)
 {
-	_metaSource=source;
+	_provider=provider;
 }
 
 Node *Tree::root()
@@ -244,7 +257,7 @@ Node *Tree::root()
 	{
 		_root=std::make_shared<Node>(nullptr);
 		FileSink wrapper(_root.get());
-		_metaSource->fetchFile("root",wrapper);
+		_provider->fetchMeta("root",wrapper);
 		_root->setName("/");
 	}
 	return _root.get();
@@ -262,12 +275,12 @@ void Tree::_fillDir(Node *dir)
 	}
 	FileSink wrapper;
 
-	const std::set<std::string>& ids=_metaSource->fetchList(dir->id());
-	for(const std::string &id : ids)
+	const IIdListPtr& ids=_provider->fetchList(dir->id());
+	while(ids->hasNext())
 	{
 		uptr<Node> nn(new Node(dir));
 		wrapper.setNode(nn.get());
-		_metaSource->fetchFile(id,wrapper);
+		_provider->fetchMeta(ids->next(),wrapper);
 		dir->addNext(nn.get());
 		nn.release();
 	}
@@ -360,17 +373,17 @@ void Tree::setMD5(Node *node, const MD5Signature &md5)
 	node->setMD5(md5);
 }
 
-void Tree::setTime(Node *node, TimeAttrib what, const timespec &value)
+void Tree::setTime(Node *node, IMetaWrapper::TimeAttrib what, const timespec &value)
 {
 	node->setTime(what,value);
 }
 
-const timespec &Tree::time(Node *node, TimeAttrib what) const
+const timespec &Tree::time(Node *node, IMetaWrapper::TimeAttrib what) const
 {
 	return node->time(what);
 }
 
-void Tree::clearTime(Node *node, TimeAttrib what)
+void Tree::clearTime(Node *node, IMetaWrapper::TimeAttrib what)
 {
 	node->clearTime(what);
 }

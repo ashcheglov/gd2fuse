@@ -27,10 +27,10 @@ namespace
 }
 
 
-void ContentManager::init(const boost::filesystem::path &workDir, ContentManager::IContentSource *cSource)
+void ContentManager::init(const boost::filesystem::path &workDir, const IDataProviderPtr &dp)
 {
 	_workDir=workDir;
-	_cSource=cSource;
+	_dp=dp;
 }
 
 uint64_t _open(const fs::path &path,int flags)
@@ -48,7 +48,7 @@ uint64_t ContentManager::openFile(const std::string &id,int flags)
 	if(fs::exists(fileName))		// throws boost::filesystem_error
 		return _open(fileName,flags);
 
-	IContentSource::IDataReaderUPtr reader(_cSource->contentReader(id));
+	IDataReaderPtr reader=_dp->createContentReader(id,IConvertFormatPtr());
 	if(!reader->done())
 	{
 		fs::create_directories(fileName.parent_path());

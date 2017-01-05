@@ -1,13 +1,6 @@
 #include "Application.h"
 #include "error/G2FException.h"
-#include "providers/google/Auth.h"
 #include "presentation/FuseGate.h"
-#include <googleapis/client/util/status.h>
-#include <googleapis/client/transport/curl_http_transport.h>
-#include <googleapis/client/transport/http_request_batch.h>
-#include <googleapis/client/util/status.h>
-//#include <googleapis/strings/strcat.h>
-#include <googleapis/client/transport/http_authorization.h>
 #include <unistd.h>
 #include <sys/types.h>
 
@@ -18,6 +11,9 @@ Application::Application(const std::string &email, int argc, char *argv[])
 {
 	if(_email.empty())
 		G2F_EXCEPTION("e-mail id hasn't set").throwIt(G2FErrorCodes::WrongAppArguments);
+	_provider=ProvidersRegistry::getInstance().detectByAccountName(_email);
+	if(!_provider)
+		G2F_EXCEPTION(_email).throwIt(G2FErrorCodes::CouldntDetermineProvider);
 }
 
 Application &Application::setDebug(bool value)
@@ -32,19 +28,14 @@ Application &Application::setReadOnly(bool value)
 	return *this;
 }
 
-Application &Application::setSSLVerificationDisabled(bool value)
+Application &Application::setProviderArgs(const Application::ProviderArgs &prArgs)
 {
-	_disableSSLverify=value;
+	_prArgs=prArgs;
 }
 
 Application &Application::setPathManager(const IPathManagerPtr &p)
 {
 	_pm=p;
-}
-
-Application &Application::setSSLCApath(const boost::filesystem::path &p)
-{
-	_SSLCApath=p;
 }
 
 IPathManager& Application::pathManager()
@@ -56,11 +47,8 @@ IPathManager& Application::pathManager()
 
 int Application::fuseStart(const FUSEOpts &opts)
 {
-	Auth a(transport(),pathManager().secretFile());
-	a.setErrorCallback();
-	OAuth2CredentialPtr oa2c=a.auth(_email,pathManager().credentialHomeDir());
-
-	FuseGate drive(driveService(),oa2c.get(),pathManager().cacheDir(_email));
+	const IProviderSessionPtr &sess=_provider->createSession(_email,_prArgs);
+	FuseGate drive(*sess,pathManager().cacheDir(_email));
 	return drive.run(opts);
 }
 
@@ -72,10 +60,14 @@ int Application::fuseHelp()
 
 int Application::createAuthFile(const std::string& authCode)
 {
-	Auth a(transport(),pathManager().secretFile());
-	a.setShellCallback(authCode);
-	a.auth(_email,pathManager().credentialHomeDir());
-	return 0;
+	int ret=0;
+	const IProviderSessionPtr &sess=_provider->createSession(_email,_prArgs);
+	const IOAuth2ProcessPtr &o2p=sess->createOAuth2Process();
+	if(authCode.empty())
+		o2p->startNativeApp();
+	else
+		ret=o2p->finishNativeApp(authCode);
+	return ret;
 }
 
 uid_t Application::getUID()
@@ -104,46 +96,6 @@ Application *Application::instance()
 	return theApp.get();
 }
 
-g_drv::DriveService &Application::driveService()
-{
-	if(!_service)
-	{
-		g_utl::Status status;
-		uptr<g_cli::HttpTransport> t(transportConfig().NewDefaultTransport(&status));
-		if (!status.ok())
-			throw G2F_EXCEPTION("Error creating HTTP transport").arg(status.error_code()).arg(status.ToString());
-
-		_service.reset(new g_drv::DriveService(t.release()));
-	}
-	return *_service;
-}
-
-g_cli::HttpTransport *Application::transport()
-{
-	g_utl::Status status;
-	uptr<g_cli::HttpTransport> t(transportConfig().NewDefaultTransport(&status));
-	if (!status.ok())
-		throw G2F_EXCEPTION("Error creating HTTP transport").arg(status.error_code()).arg(status.ToString());
-	return t.release();
-}
-
-g_cli::HttpTransportLayerConfig &Application::transportConfig()
-{
-	if(!_config)
-	{
-		_config.reset(new g_cli::HttpTransportLayerConfig);
-		g_cli::HttpTransportFactory* factory =
-				new g_cli::CurlHttpTransportFactory(_config.get());
-		_config->ResetDefaultTransportFactory(factory);
-		g_cli::HttpTransportOptions* opts=_config->mutable_default_transport_options();
-		if(_disableSSLverify)
-			opts->set_cacerts_path(g_cli::HttpTransportOptions::kDisableSslVerification);
-		else
-		if(!_SSLCApath.empty())
-			opts->set_cacerts_path(_SSLCApath.string());
-	}
-	return *_config;
-}
 
 
 

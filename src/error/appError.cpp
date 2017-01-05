@@ -31,6 +31,10 @@ public:
 			return G2FMESSAGE("HTTP permission error");
 		case HttpTimeoutError:
 			return G2FMESSAGE("HTTP timeout error");
+		case NotImplemented:
+			return G2FMESSAGE("Not implemented yet");
+		case CouldntDetermineProvider:
+			return G2FMESSAGE("Could not detemine cloud provider by account name");
 		}
 		return G2FMESSAGE("Unknown error");
 	}
@@ -42,6 +46,7 @@ public:
 			int cond=condition.value();
 			switch (code)
 			{
+			case CouldntDetermineProvider:
 			case WrongAppArguments:
 				{
 					if(cond==err::errc::invalid_argument)
@@ -66,6 +71,12 @@ public:
 			case HttpTimeoutError:
 				{
 					if(cond==err::errc::timed_out)
+						return true;
+				}
+				break;
+			case NotImplemented:
+				{
+					if(cond==err::errc::not_supported)
 						return true;
 				}
 				break;

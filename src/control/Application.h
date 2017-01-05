@@ -3,21 +3,18 @@
 #include "utils/decls.h"
 #include "utils/PathManager.h"
 #include "FuseOpts.h"
-#include <googleapis/client/transport/http_transport.h>
-#include <google/drive_api/drive_service.h>
-
-G2F_GOOGLE_NS_SHORTHANDS
-namespace g_drv=google_drive_api;
+#include "providers/ProvidersRegistry.h"
 
 class Application
 {
 public:
 
+	typedef std::vector<std::string> ProviderArgs;
+
 	Application& setDebug(bool value=true);
 	Application& setReadOnly(bool value=true);
-	Application& setSSLVerificationDisabled(bool value=true);
+	Application& setProviderArgs(const ProviderArgs &prArgs);
 	Application& setPathManager(const IPathManagerPtr &p);
-	Application& setSSLCApath(const fs::path& p);
 
 	IPathManager &pathManager();
 
@@ -44,18 +41,11 @@ private:
 
 	bool _debug=false;
 	bool _readOnly=false;
-	bool _disableSSLverify=false;
 
 	IPathManagerPtr _pm;
-	fs::path _SSLCApath;	// path to the SSL certificate authority validation data
 	std::string _email;
-
-	g_drv::DriveService& driveService();
-	g_cli::HttpTransportLayerConfig& transportConfig();
-	g_cli::HttpTransport *transport();
-
-	uptr<g_drv::DriveService> _service;
-	uptr<g_cli::HttpTransportLayerConfig> _config;
+	IProviderPtr _provider;
+	ProviderArgs _prArgs;
 
 };
 

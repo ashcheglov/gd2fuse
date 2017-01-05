@@ -1,6 +1,5 @@
 #include <iostream>
 #include "utils/log.h"
-//#include <googleapis/client/service/client_service.h>
 #include "utils/decls.h"
 #include "utils/Enum.h"
 #include <boost/program_options.hpp>
@@ -58,6 +57,7 @@ int main(int argc, char *argv[])
 	fs::path confPath;
 	std::string authCode;
 	std::string email;
+	Application::ProviderArgs prArgs;
 
 	// TODO Implement Init/DeInit process
 	// TODO Needs possibility setting up umask
@@ -75,8 +75,8 @@ int main(int argc, char *argv[])
 		("conf-dir",			po::value<fs::path>(&confPath),
 								"application conf directory")
 		("auth-code",			po::value<std::string>(&authCode),
-									"authorization code was obtained from Google")
-		("no-ssl-vfy",			"disable verify server sertificates")
+									"authorization code was obtained from cloud provider")
+		("-p",					po::value<Application::ProviderArgs>(&prArgs),"Provider properties")
 		("email",				po::value<std::string>(&email),
 								"Google email account")
 		;
@@ -112,10 +112,10 @@ FUSE options:
 	}
 
 	Application *app=Application::create(email,argc,argv);
-	app->setSSLVerificationDisabled(vm.count("no-ssl-vfy")!=0);
 	app->setDebug(vm.count("debug")!=0);
 	app->setReadOnly(vm.count("read-only")!=0);
 	app->setPathManager(createDefaultPathMapping(&confPath));
+	app->setProviderArgs(prArgs);
 
 	if(action==GetAuth)
 		return app->createAuthFile(authCode);

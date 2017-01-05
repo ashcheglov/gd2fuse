@@ -11,9 +11,11 @@
 #include <google/drive_api/drive_service.h>
 #include <boost/filesystem/fstream.hpp>
 
-G2F_GOOGLE_NS_SHORTHANDS
 namespace g_drv=google_drive_api;
+namespace g_api=googleapis;
 
+namespace google
+{
 
 /*
  *  Callback
@@ -59,7 +61,7 @@ class Auth::Impl
 {
 public:
 
-	Impl(g_cli::HttpTransport* transport,fs::path &&secretClientFile)
+	Impl(g_cli::HttpTransport* transport,const fs::path &secretClientFile)
 	{
 		fs::ifstream sf(secretClientFile);
 		if(!sf)
@@ -124,7 +126,7 @@ public:
 
 
 
-Auth::Auth(g_cli::HttpTransport *transport, fs::path &&secretClientFile)
+Auth::Auth(g_cli::HttpTransport *transport, const boost::filesystem::path &secretClientFile)
 {
 	_impl.reset(new Impl(transport,std::move(secretClientFile)));
 }
@@ -143,3 +145,6 @@ OAuth2CredentialPtr Auth::auth(const std::string &email,const fs::path& credenti
 {
 	return _impl->auth(email,credentialHomePath);
 }
+
+}
+
