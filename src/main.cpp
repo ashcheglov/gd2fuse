@@ -5,6 +5,7 @@
 #include <boost/program_options.hpp>
 #include <boost/filesystem.hpp>
 #include "control/Application.h"
+#include "control/paths/PathManager.h"
 
 namespace po=boost::program_options;
 using namespace std;
@@ -28,24 +29,25 @@ po::options_description createFUSEopts()
 	ret.add_options()
 		("mount-point",			po::value<fs::path>(),
 								"arguments")
-		("f",					"foreground operation")
-		("s",					"disable multi-threaded operation")
-		("o",					po::value<FUSEOpts::O0oList>(),
+		("-f",					"foreground operation")
+		("-s",					"disable multi-threaded operation")
+		("-o",					po::value<FUSEOpts::O0oList>(),
 								"options")
 		;
+
 	return ret;
 }
 
 FUSEOpts& readFUSEopts(const po::variables_map& vm,FUSEOpts& opts)
 {
 	opts.debug=vm.count("debug")!=0;
-	opts.disableMThread=vm.count("s")!=0;
-	opts.foreground=vm.count("f")!=0;
+	opts.disableMThread=vm.count("-s")!=0;
+	opts.foreground=vm.count("-f")!=0;
 
 	if(vm.count("mount-point"))
 		opts.mountPoint=vm["mount-point"].as<fs::path>();
-	if(vm.count("o"))
-		opts.ooo=vm["o"].as<FUSEOpts::O0oList>();
+	if(vm.count("-o"))
+		opts.ooo=vm["-o"].as<FUSEOpts::O0oList>();
 	return opts;
 }
 
@@ -59,8 +61,6 @@ int main(int argc, char *argv[])
 	std::string email;
 	Application::ProviderArgs prArgs;
 
-	// TODO Implement Init/DeInit process
-	// TODO Needs possibility setting up umask
 	// TODO demonize() app in SERVICE mode
 	po::options_description opts("options");
 	opts.add_options()
@@ -76,7 +76,7 @@ int main(int argc, char *argv[])
 								"application conf directory")
 		("auth-code",			po::value<std::string>(&authCode),
 									"authorization code was obtained from cloud provider")
-		("-p",					po::value<Application::ProviderArgs>(&prArgs),"Provider properties")
+		("property,p",			po::value<Application::ProviderArgs>(&prArgs),"Redefined property value")
 		("email",				po::value<std::string>(&email),
 								"Google email account")
 		;
@@ -100,8 +100,7 @@ FUSE options:
 	p.add("mount-point",1);
 
 	po::variables_map vm;
-	po::store(po::command_line_parser(argc,argv).
-		options(all).positional(p).run(), vm);
+	po::store(po::command_line_parser(argc,argv).options(all).positional(p).run(), vm);
 	po::notify(vm);
 
 	if(argc==1 || vm.count("help"))
@@ -111,10 +110,10 @@ FUSE options:
 		return Application::fuseHelp();
 	}
 
-	Application *app=Application::create(email,argc,argv);
+	Application *app=Application::create(email,argc,argv,confPath);
 	app->setDebug(vm.count("debug")!=0);
 	app->setReadOnly(vm.count("read-only")!=0);
-	app->setPathManager(createDefaultPathMapping(&confPath));
+
 	app->setProviderArgs(prArgs);
 
 	if(action==GetAuth)

@@ -6,6 +6,23 @@
 #include "IProvider.h"
 
 
+/**
+ * @brief Factory to producing providers instance
+ */
+class IProviderFactory
+{
+public:
+	virtual std::string getName() =0;
+	virtual IProviderPtr create(const IConfigurationPtr &globalConf) =0;
+};
+G2F_DECLARE_PTR(IProviderFactory);
+
+
+
+
+/**
+ * @brief Global Providers' factory registry
+ */
 class ProvidersRegistry
 {
 
@@ -13,8 +30,8 @@ public:
 	typedef std::vector<std::string> ProviderNames;
 
 	ProviderNames getAvailableProviders() const;
-	IProviderPtr find(const std::string &name) const;
-	IProviderPtr detectByAccountName(const std::string &accName) const;
+	IProviderFactoryPtr find(const std::string &name) const;
+	IProviderFactoryPtr detectByAccountName(const std::string &accName) const;
 	static ProvidersRegistry& getInstance();
 
 private:
@@ -23,7 +40,7 @@ private:
 	ProvidersRegistry& operator=(const ProvidersRegistry&) =delete;
 
 	// unordered_map? May be later...
-	std::vector<IProviderPtr> _providersList;
+	std::vector<IProviderFactoryPtr> _pfList;
 
 	template<typename T> friend class ProviderRegistrar;
 };
@@ -31,12 +48,15 @@ private:
 G2F_DECLARE_PTR(ProvidersRegistry);
 
 
-// Autoregistrar (convinience)
+
+
+
+// Autoregistrar (for convenience)
 template<typename T>
 struct ProviderRegistrar
 {
 	ProviderRegistrar(ProvidersRegistry & reg)
 	{
-		reg._providersList.push_back(std::make_shared<T>());
+		reg._pfList.push_back(std::make_shared<T>());
 	}
 };

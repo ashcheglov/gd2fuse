@@ -17,6 +17,7 @@ namespace g_api=googleapis;
 namespace google
 {
 
+const char *SECRET_APP_KEY= R"###!###({"installed":{"client_id":"1049975340993-olch63tmobej09fqss1ccirki4q440kk.apps.googleusercontent.com","project_id":"gd2fuse","auth_uri":"https://accounts.google.com/o/oauth2/auth","token_uri":"https://accounts.google.com/o/oauth2/token","auth_provider_x509_cert_url":"https://www.googleapis.com/oauth2/v1/certs","client_secret":"IfvEPU9vl4ViRPCdzS95PkaQ","redirect_uris":["urn:ietf:wg:oauth:2.0:oob","http://localhost"]}})###!###";
 /*
  *  Callback
 */
@@ -63,14 +64,20 @@ public:
 
 	Impl(g_cli::HttpTransport* transport,const fs::path &secretClientFile)
 	{
-		fs::ifstream sf(secretClientFile);
-		if(!sf)
-			throw G2F_EXCEPTION("Can't open secret client file '%1'").arg(secretClientFile.string());
+		std::string secret;
+		if(fs::exists(secretClientFile))
+		{
+			fs::ifstream sf(secretClientFile);
+			if(!sf)
+				throw G2F_EXCEPTION("Can't open secret client file '%1'").arg(secretClientFile.string());
+
+			secret.assign(std::istream_iterator<std::string::value_type>(sf),
+							   std::istream_iterator<std::string::value_type>());
+		}
+		else
+			secret=SECRET_APP_KEY;
 
 		g_utl::Status status;
-		std::string secret;
-		secret.assign(std::istream_iterator<std::string::value_type>(sf),
-						   std::istream_iterator<std::string::value_type>());
 
 		_flow.reset(g_cli::OAuth2AuthorizationFlow::MakeFlowFromClientSecretsJson(
 						secret, transport, &status));

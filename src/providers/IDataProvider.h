@@ -7,6 +7,8 @@
 #include "IIdList.h"
 #include "IMetaWrapper.h"
 
+class IProviderSession;
+
 class IDataProvider
 {
 
@@ -15,6 +17,7 @@ public:
 	virtual IDataReaderPtr createContentReader(const std::string &id, IConvertFormatPtr targetFormat) =0;
 	virtual IIdListPtr fetchList(const std::string &id) =0;
 	virtual void fetchMeta(const std::string &id, IMetaWrapper &dest) =0;
+	virtual IProviderSession *getParent() =0;
 
 	virtual ~IDataProvider() {}
 };

@@ -4,6 +4,9 @@
 #include "providers/IProvider.h"
 #include "providers/IDataReader.h"
 #include "error/G2FException.h"
+#include "control/props/AbstractFileStaticInitPropertiesList.h"
+#include "control/ChainedCofiguration.h"
+#include "control/paths/PathManager.h"
 
 #include "providers/google/Auth.h"
 #include <googleapis/client/util/status.h>
@@ -108,7 +111,7 @@ G2FError checkHttpResponse(const g_cli::HttpRequest* request)
 			ret=G2FErrorCodes::HttpServerError;
 		ret.setDetail(request->url());
 
-		// TODO Exponential backoff
+		// TODO Using exponential backoff
 		// Detect necessity of using of exponential backoff (see https://developers.google.com/drive/v3/web/handle-errors#exponential-backoff)
 		// try parse content as JSON or decode content-type
 		/*g_cli::JsonCppCapsule<g_cli::JsonCppData> jsonData;
@@ -124,6 +127,39 @@ G2FError checkHttpResponse(const g_cli::HttpRequest* request)
 	}
 	return ret;
 }
+
+
+
+
+
+class AbstractGoogleConfiguration : public IConfiguration
+{
+	// IConfiguration interface
+public:
+	virtual boost::optional<std::string> getProperty(const std::string &name) override
+	{
+
+		const IPropertyDefinitionPtr &p=getPL()->findProperty(name);
+		if(p)
+			return p->getValue();
+		return boost::none;
+	}
+	virtual G2FError setProperty(const std::string &name, const std::string &value) override
+	{
+		IPropertyDefinitionPtr p=getPL()->findProperty(name);
+		if(p)
+			return p->setValue(value);
+		return G2FError(G2FErrorCodes::PropertyNotFound).setDetail(name);
+	}
+	virtual IPropertiesListPtr getProperiesList() override
+	{
+		return getPL();
+	}
+
+protected:
+	virtual const IPropertiesListPtr& getPL() =0;
+
+};
 
 
 
@@ -192,8 +228,9 @@ class GoogleDataProvider : public IDataProvider
 {
 public:
 
-	GoogleDataProvider(sptr<g_drv::DriveService> service, const OAuth2CredentialPtr &authCred)
-		:_service(service),
+	GoogleDataProvider(IProviderSession *parent,sptr<g_drv::DriveService> service, const OAuth2CredentialPtr &authCred)
+		: _parent(parent),
+		  _service(service),
 		  _authCred(authCred)
 	{}
 
@@ -279,10 +316,10 @@ public:
 		//gdt2timespec(file->get_created_date(),ts);
 		//leaf->setTime(Node::CreatedTime,ts);
 		gdt2timespec(file->get_modified_date(),ts);
-		dest.setTime(IMetaWrapper::ModificationTime,ts);
-		dest.setTime(IMetaWrapper::ChangeTime,ts);
+		dest.setTime(ModificationTime,ts);
+		dest.setTime(ChangeTime,ts);
 		gdt2timespec(file->get_last_viewed_by_me_date(),ts);
-		dest.setTime(IMetaWrapper::AccessTime,ts);
+		dest.setTime(AccessTime,ts);
 
 		size_t size=file->get_file_size();
 		dest.setSize(size);
@@ -299,7 +336,13 @@ public:
 		}
 	}
 
+	virtual IProviderSession *getParent() override
+	{
+		return _parent;
+	}
+
 private:
+	IProviderSession *_parent=nullptr;
 	sptr<g_drv::DriveService> _service;
 	OAuth2CredentialPtr _authCred;
 };
@@ -372,6 +415,92 @@ private:
 
 
 
+
+
+//
+//   Provider Session Configuration
+//
+/////////////////////////////////////////
+//
+//   Provider Configuration
+//
+/////////////////////////////////////////
+class GoogleProviderSessionProperties : public AbstractFileStaticInitPropertiesList
+{
+
+public:
+	GoogleProviderSessionProperties(const fs::path &fileName,const std::string &accName)
+		: _fileName(fileName),
+		  _accName(accName)
+	{}
+
+	// IPropertiesList interface
+public:
+	virtual std::string getName() override
+	{
+		return _accName;
+	}
+
+	// AbstractStaticInitPropertiesList interface
+protected:
+	virtual std::pair<const PropDefi *, size_t> getPropertiesDefinition() override
+	{
+		return std::make_pair(nullptr,0);
+	}
+
+	virtual std::pair<const EnumDefi *, size_t> getEnumsDefinition() override
+	{
+		return std::make_pair(nullptr,0);
+	}
+
+	// AbstractFileStaticInitPropertiesList interface
+public:
+	virtual boost::filesystem::path getPropertiesFileName() override
+	{
+		return _fileName;
+	}
+private:
+	fs::path _fileName;
+	std::string _accName;
+};
+G2F_DECLARE_PTR(GoogleProviderSessionProperties);
+
+
+
+
+
+
+
+class GoogleSessionConfiguration : public AbstractGoogleConfiguration
+{
+public:
+	GoogleSessionConfiguration(const IPathManagerPtr &parentPM,const std::string &accName)
+	{
+		_pm=createNextLevelWrapperPathManager(parentPM,accName);
+		_props=std::make_shared<GoogleProviderSessionProperties>(_pm->getDir(IPathManager::CONFIG),accName);
+	}
+
+	// IConfiguration interface
+public:
+	virtual IPathManagerPtr getPaths() override
+	{
+		return _pm;
+	}
+protected:
+	virtual const IPropertiesListPtr& getPL() override
+	{
+		return _props;
+	}
+
+private:
+	IPropertiesListPtr _props;
+	IPathManagerPtr _pm;
+};
+
+
+
+
+
 //
 //   Provider Session
 //
@@ -380,27 +509,30 @@ class GoogleProviderSession : public IProviderSession
 {
 public:
 
-	GoogleProviderSession(const std::string &accId,sptr<g_cli::HttpTransportLayerConfig> conf,const IProvider* parent)
+	GoogleProviderSession(const std::string &accId,sptr<g_cli::HttpTransportLayerConfig> conf,IProvider* parent)
 		: _accId(accId),
-		  _conf(conf),
+		  _httpConf(conf),
 		  _parent(parent)
 	{
 		_service=std::make_shared<g_drv::DriveService>(createTransport().release());
+
+		IConfigurationPtr current=std::make_shared<GoogleSessionConfiguration>(parent->getConfiguration()->getPaths(),_accId);
+		_conf=std::make_shared<ChainedConfiguration>(parent->getConfiguration(),current);
 	}
 
 	// IProviderSession interface
 public:
 	virtual IDataProviderPtr createDataProvider() override
 	{
-		return std::make_shared<GoogleDataProvider>(_service,getAuthCred());
+		return std::make_shared<GoogleDataProvider>(this,_service,getAuthCred());
 	}
 
 	virtual IOAuth2ProcessPtr createOAuth2Process() override
 	{
-		return std::make_shared<GoogleOAuth2>(_service->transport(),_accId,Application::instance()->pathManager().secretFile(),Application::instance()->pathManager().credentialHomeDir());
+		return std::make_shared<GoogleOAuth2>(_service->transport(),_accId,getSecretFile(),getCredentialHomeDir());
 	}
 
-	virtual const IProvider *getProvider() override
+	virtual IProvider *getProvider() override
 	{
 		return _parent;
 	}
@@ -410,21 +542,38 @@ public:
 		return !(!_authCred);
 	}
 
+	virtual IConfigurationPtr getConfiguration() override
+	{
+		return _conf;
+	}
+
 	OAuth2CredentialPtr getAuthCred()
 	{
 		if(!_authCred)
 		{
-			Auth a(createTransport().release(),Application::instance()->pathManager().secretFile());
+			Auth a(createTransport().release(),getSecretFile());
 			a.setErrorCallback();
-			_authCred=a.auth(_accId,Application::instance()->pathManager().credentialHomeDir());
+			_authCred=a.auth(_accId,getCredentialHomeDir());
 		}
 		return _authCred;
+	}
+
+	fs::path getSecretFile()
+	{
+		const fs::path &confDir=_parent->getConfiguration()->getPaths()->getDir(IPathManager::CONFIG);
+		return confDir/G2F_APP_NAME "_secret.json";
+	}
+
+	fs::path getCredentialHomeDir()
+	{
+		fs::path confDir=getConfiguration()->getPaths()->getDir(IPathManager::CONFIG);
+		return confDir/"auth.info";
 	}
 
 	uptr<g_cli::HttpTransport> createTransport()
 	{
 		g_utl::Status status;
-		uptr<g_cli::HttpTransport> ret(_conf->NewDefaultTransport(&status));
+		uptr<g_cli::HttpTransport> ret(_httpConf->NewDefaultTransport(&status));
 		if (!status.ok())
 			throw G2F_EXCEPTION("Error creating HTTP transport").arg(status.error_code()).arg(status.ToString());
 		return ret;
@@ -432,11 +581,141 @@ public:
 
 private:
 	std::string _accId;
-	sptr<g_cli::HttpTransportLayerConfig> _conf;
+	sptr<g_cli::HttpTransportLayerConfig> _httpConf;
 	sptr<g_drv::DriveService> _service;
 	OAuth2CredentialPtr _authCred;
-	const IProvider *_parent=nullptr;
+	IProvider *_parent=nullptr;
+	IConfigurationPtr _conf;
+
 };
+
+
+
+
+
+//
+//   Provider Configuration
+//
+/////////////////////////////////////////
+namespace
+{
+
+const AbstractStaticInitPropertiesList::PropDefi propsDefi[]=
+{
+//	name							type					enum		def					change	descr
+	"permission_new_gdoc",			IPropertyType::OINT,	0,			"444",				true,	"Permissions to new GDoc files (non editable).",
+	"export_gdoc_documents",		IPropertyType::ENUM,	"gdde",		"plain_text",		true,	"Format to export GDoc documents.",
+	"export_gdoc_spreadsheets",		IPropertyType::ENUM,	"gdds",		"csv",				true,	"Format to export GDoc Spreadsheets.",
+	"export_gdoc_drawings",			IPropertyType::ENUM,	"gddd",		"jpeg",				true,	"Format to export GDoc Drawings.",
+	"export_gdoc_presentations",	IPropertyType::ENUM,	"gddp",		"plain_text",		true,	"Format to export GDoc Presentations.",
+	"disable-ssl-verify",			IPropertyType::BOOL,	0,			"false",			true,	"Google servers certificate's checking will be disabled.",
+	"ssl-ca-path",					IPropertyType::PATH,	0,			"",					false,	"path to the SSL certificate authority validation data."
+};
+
+const AbstractStaticInitPropertiesList::EnumDefi enumDefi[]=
+{
+	"gdde", {
+		{"html",			"HTML"},
+		{"plain_text",		"Plain text"},
+		{"rich_text",		"RTF"},
+		{"openoffice_doc",	"OpenOffice odt"},
+		{"pdf",				"PDF"},
+		{"ms_word",			"MS Word"}
+	},
+	"gdds", {
+		{"csv",				"Comma separated list"},
+		{"openoffice_sheet","OpenOffice ods"},
+		{"pdf",				"PDF"},
+		{"ms_excel",		"MS Excel"}
+	},
+	"gddd", {
+		{"jpeg",			"JPEG"},
+		{"png",				"PNG"},
+		{"svg",				"SVG"},
+		{"pdf",				"PDF"}
+	},
+	"gddp", {
+		{"plain_text",		"Plain text"},
+		{"pdf",				"PDF"},
+		{"ms_powerpoint",	"MS PowerPoint"}
+	}
+
+};
+
+
+}
+
+
+class GoogleProviderProperties : public AbstractFileStaticInitPropertiesList
+{
+
+public:
+	GoogleProviderProperties(const fs::path &fileName)
+		: _fileName(fileName)
+	{}
+
+	// IPropertiesList interface
+public:
+	virtual std::string getName() override
+	{
+		return "gdrive";
+	}
+
+	// AbstractStaticInitPropertiesList interface
+protected:
+	virtual std::pair<const PropDefi *, size_t> getPropertiesDefinition() override
+	{
+		return std::make_pair(propsDefi,sizeof(propsDefi)/sizeof(AbstractStaticInitPropertiesList::PropDefi));
+	}
+
+	virtual std::pair<const EnumDefi *, size_t> getEnumsDefinition() override
+	{
+		return std::make_pair(enumDefi,sizeof(enumDefi)/sizeof(AbstractStaticInitPropertiesList::EnumDefi));
+	}
+
+	// AbstractFileStaticInitPropertiesList interface
+public:
+	virtual boost::filesystem::path getPropertiesFileName() override
+	{
+		return _fileName;
+	}
+private:
+	fs::path _fileName;
+};
+G2F_DECLARE_PTR(GoogleProviderProperties);
+
+
+
+
+
+
+
+class GoogleConfiguration : public AbstractGoogleConfiguration
+{
+public:
+	GoogleConfiguration(const IConfigurationPtr &parent)
+	{
+		_pm=createNextLevelWrapperPathManager(parent->getPaths(),"gdrive");
+		_props=std::make_shared<GoogleProviderProperties>(_pm->getDir(IPathManager::CONFIG));
+	}
+
+	// IConfiguration interface
+public:
+	virtual IPathManagerPtr getPaths() override
+	{
+		return _pm;
+	}
+protected:
+	virtual const IPropertiesListPtr& getPL() override
+	{
+		return _props;
+	}
+
+private:
+	IPropertiesListPtr _props;
+	IPathManagerPtr _pm;
+};
+
 
 
 
@@ -447,6 +726,12 @@ private:
 /////////////////////////////////////////
 class GoogleProvider : public IProvider
 {
+public:
+	GoogleProvider(const IConfigurationPtr &globalConf)
+	{
+		IConfigurationPtr current=std::make_shared<GoogleConfiguration>(globalConf);
+		_conf=std::make_shared<ChainedConfiguration>(globalConf,current);
+	}
 
 public:
 	virtual std::string getName()
@@ -471,6 +756,11 @@ public:
 		return ISupportedConversionPtr();
 	}
 
+	virtual IConfigurationPtr getConfiguration() override
+	{
+		return _conf;
+	}
+
 	// Allowable args:
 	// disable-ssl-verify - Google servers certificate's checking will be disabled
 	// ssl-ca-path=<path> - path to the SSL certificate authority validation data.
@@ -493,9 +783,34 @@ public:
 		}
 		return ret;
 	}
+
+private:
+	IConfigurationPtr _conf;
 };
 
-ProviderRegistrar<GoogleProvider> _reg(ProvidersRegistry::getInstance());
+
+
+
+
+
+
+class GoogleProviderfactory : public IProviderFactory
+{
+
+
+	// IProviderFactory interface
+public:
+	virtual std::string getName() override
+	{
+		return "gdrive";
+	}
+	virtual IProviderPtr create(const IConfigurationPtr &globalConf) override
+	{
+		return std::make_shared<GoogleProvider>(globalConf);
+	}
+};
+
+ProviderRegistrar<GoogleProviderfactory> _reg(ProvidersRegistry::getInstance());
 
 }
 

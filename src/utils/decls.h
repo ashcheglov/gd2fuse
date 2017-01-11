@@ -17,3 +17,14 @@ using sptr=std::shared_ptr<T>;
 #define G2FMESSAGE(message) message
 
 namespace fs=boost::filesystem;
+
+enum TimeAttrib
+{
+	AccessTime,
+	ModificationTime,
+	ChangeTime
+};
+
+// timespec operate
+#define CLEAR_TIMESPEC(ts)  do{ts.tv_sec=0; ts.tv_nsec=0;}while(0)
+#define ISSET_TIMESPEC(ts)	(ts.tv_sec!=0)

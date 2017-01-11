@@ -4,31 +4,31 @@
 ProvidersRegistry::ProviderNames ProvidersRegistry::getAvailableProviders() const
 {
 	ProvidersRegistry::ProviderNames ret;
-	for(auto p : _providersList)
+	for(auto p : _pfList)
 		ret.push_back(p->getName());
 	return ret;
 }
 
-IProviderPtr ProvidersRegistry::find(const std::string &name) const
+IProviderFactoryPtr ProvidersRegistry::find(const std::string &name) const
 {
 	std::string loName(name);
 
 	boost::to_lower(loName);
-	for(auto p : _providersList)
+	for(auto p : _pfList)
 	{
 		std::string pName=p->getName();
 		boost::to_lower(pName);
 		if(loName==pName)
 			return p;
 	}
-	return IProviderPtr();
+	return IProviderFactoryPtr();
 }
 
-IProviderPtr ProvidersRegistry::detectByAccountName(const std::string &accName) const
+IProviderFactoryPtr ProvidersRegistry::detectByAccountName(const std::string &accName) const
 {
 	if(accName.find("gmail")!=std::string::npos)
 		return find("gdrive");
-	return IProviderPtr();
+	return IProviderFactoryPtr();
 }
 
 ProvidersRegistry &ProvidersRegistry::getInstance()

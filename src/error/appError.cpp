@@ -33,8 +33,14 @@ public:
 			return G2FMESSAGE("HTTP timeout error");
 		case NotImplemented:
 			return G2FMESSAGE("Not implemented yet");
+		case NotSupported:
+			return G2FMESSAGE("Feature is not supported");
 		case CouldntDetermineProvider:
 			return G2FMESSAGE("Could not detemine cloud provider by account name");
+		case PropertyNotFound:
+			return G2FMESSAGE("Unknown property");
+		case CantOpenConfFile:
+			return G2FMESSAGE("Can not open configuration file");
 		}
 		return G2FMESSAGE("Unknown error");
 	}
@@ -46,6 +52,7 @@ public:
 			int cond=condition.value();
 			switch (code)
 			{
+			case PropertyNotFound:
 			case CouldntDetermineProvider:
 			case WrongAppArguments:
 				{
@@ -53,6 +60,8 @@ public:
 						return true;
 				}
 				break;
+			case ErrorModifyConfFile:
+			case CantOpenConfFile:
 			case HttpReadError:
 			case HttpTransportError:
 			case HttpClientError:
@@ -74,6 +83,7 @@ public:
 						return true;
 				}
 				break;
+			case NotSupported:
 			case NotImplemented:
 				{
 					if(cond==err::errc::not_supported)
@@ -111,12 +121,12 @@ G2FError::G2FError(int val, const boost::system::error_category &cat)
 	: err::error_code(val,cat)
 {}
 
-void G2FError::setDetail(const std::string &detail)
+G2FError &G2FError::setDetail(const std::string &detail)
 {
 	_detail=detail;
 }
 
-const std::string &G2FError::detail()
+const std::string &G2FError::getDetail()
 {
 	return _detail;
 }

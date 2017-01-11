@@ -1,19 +1,23 @@
 #include "Application.h"
-#include "error/G2FException.h"
 #include "presentation/FuseGate.h"
 #include <unistd.h>
+#include <time.h>
 #include <sys/types.h>
+#include "Configuration.h"
 
-Application::Application(const std::string &email, int argc, char *argv[])
+Application::Application(const std::string &email, int argc, char *argv[], const fs::path &manualConf)
 	: _email(email),
 	  _argc(argc),
 	  _argv(argv)
 {
+	_conf=createGlobalConfiguration(manualConf);
 	if(_email.empty())
 		G2F_EXCEPTION("e-mail id hasn't set").throwIt(G2FErrorCodes::WrongAppArguments);
-	_provider=ProvidersRegistry::getInstance().detectByAccountName(_email);
+	const auto& factory=ProvidersRegistry::getInstance().detectByAccountName(_email);
+	_provider=factory->create(_conf);
 	if(!_provider)
 		G2F_EXCEPTION(_email).throwIt(G2FErrorCodes::CouldntDetermineProvider);
+	clock_gettime(CLOCK_REALTIME,&_startTime);
 }
 
 Application &Application::setDebug(bool value)
@@ -33,22 +37,15 @@ Application &Application::setProviderArgs(const Application::ProviderArgs &prArg
 	_prArgs=prArgs;
 }
 
-Application &Application::setPathManager(const IPathManagerPtr &p)
+const IConfigurationPtr &Application::getConfiguration()
 {
-	_pm=p;
-}
-
-IPathManager& Application::pathManager()
-{
-	if(!_pm)
-		_pm=createDefaultPathMapping();
-	return *_pm;
+	return _conf;
 }
 
 int Application::fuseStart(const FUSEOpts &opts)
 {
 	const IProviderSessionPtr &sess=_provider->createSession(_email,_prArgs);
-	FuseGate drive(*sess,pathManager().cacheDir(_email));
+	FuseGate drive(*sess);
 	return drive.run(opts);
 }
 
@@ -80,14 +77,24 @@ gid_t Application::getGID()
 	return getgid();
 }
 
+std::string Application::applicationName()
+{
+	return G2F_APP_NAME;
+}
+
+timespec Application::startTime()
+{
+	return this->_startTime;
+}
+
 namespace
 {
 	uptr<Application> theApp;
 }
 
-Application *Application::create(const std::string &email, int argc, char *argv[])
+Application *Application::create(const std::string &email, int argc, char *argv[], const fs::path &manualConf)
 {
-	theApp.reset(new Application(email,argc,argv));
+	theApp.reset(new Application(email,argc,argv,manualConf));
 	return theApp.get();
 }
 

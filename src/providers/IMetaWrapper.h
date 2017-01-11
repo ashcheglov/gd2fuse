@@ -19,13 +19,6 @@ public:
 		Shortcut
 	};
 
-	enum TimeAttrib
-	{
-		AccessTime,
-		ModificationTime,
-		ChangeTime
-	};
-
 	virtual void setFileType(FileType value) =0;
 	virtual void setId(const std::string &id) =0;
 	virtual void setFileName(const std::string &id) =0;

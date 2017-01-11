@@ -228,6 +228,7 @@ const char *G2FException::what() const noexcept
 void G2FException::_buildWhat()
 {
 	_what=_error.message();
-	if(!_error.detail().empty())
-		_what+=": "+_error.detail();
+	const auto &d=_error.getDetail();
+	if(!d.empty())
+		_what+=": "+d;
 }

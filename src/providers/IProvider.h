@@ -4,6 +4,7 @@
 #include "utils/decls.h"
 #include "IProviderSession.h"
 #include "ISupportedConversion.h"
+#include "control/IConfiguration.h"
 
 class IProvider
 {
@@ -15,9 +16,9 @@ public:
 
 	virtual std::string getName() =0;
 	virtual int getProperties() =0;
-	// TODO Reporting about allowable properties
 	virtual IProviderSessionPtr createSession(const std::string &accountId,const PropList &props) =0;
 	virtual ISupportedConversionPtr getSupportedConversion() =0;
+	virtual IConfigurationPtr getConfiguration() =0;
 
 	virtual ~IProvider() {}
 };

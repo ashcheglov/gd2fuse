@@ -16,7 +16,11 @@ enum G2FErrorCodes
 	HttpPermissionError,
 	HttpTimeoutError,
 	NotImplemented,
-	CouldntDetermineProvider
+	NotSupported,
+	CouldntDetermineProvider,
+	PropertyNotFound,
+	CantOpenConfFile,
+	ErrorModifyConfFile
 };
 
 namespace boost
@@ -25,7 +29,7 @@ namespace system
 {
 template <>
 struct is_error_code_enum<G2FErrorCodes>
-		: public boost::true_type {};
+	: public boost::true_type {};
 }
 }
 
@@ -40,9 +44,9 @@ class G2FError : public err::error_code
 {
 public:
 	G2FError();
-	G2FError(int val,const err::error_category &cat);
-	void setDetail(const std::string &detail);
-	const std::string& detail();
+	G2FError(int val,const err::error_category &cat=appErrorCategory());
+	G2FError &setDetail(const std::string &detail);
+	const std::string& getDetail();
 
 	template <class ErrorCodeEnum>
 	G2FError(ErrorCodeEnum e) BOOST_SYSTEM_NOEXCEPT

@@ -29,11 +29,56 @@ set(SRC_LIST	main.cpp
                 control/Application.h
                 control/Application.cpp
                 control/FuseOpts.h
+                control/ChainedCofiguration.cpp
+                control/ChainedCofiguration.h
+                control/Configuration.cpp
+                control/Configuration.h
+                control/IConfiguration.h
 
-                data/ContentManager.h
-                data/ContentManager.cpp
-                data/Data.h
-                data/Data.cpp
+                control/paths/IPathManager.h
+                control/paths/PathManager.h
+                control/paths/PathManager.cpp
+                control/paths/AbstractPathManager.h
+                control/paths/AbstractPathManager.cpp
+
+                control/props/AbstractFileStaticInitPropertiesList.cpp
+                control/props/AbstractFileStaticInitPropertiesList.h
+                control/props/AbstractStaticInitPropertiesList.cpp
+                control/props/AbstractStaticInitPropertiesList.h
+                control/props/IEventHandler.h
+                control/props/IPropertiesList.h
+                control/props/IPropertyDefinition.h
+                control/props/IPropertyIterator.h
+                control/props/Property.cpp
+                control/props/Property.h
+
+                control/types/IPropertyType.cpp
+                control/types/IPropertyType.h
+                control/types/IPropertyTypeEnumDef.h
+                control/types/PropertyTypesRegistry.cpp
+                control/types/PropertyTypesRegistry.h
+                control/types/PropertyTypeBool.cpp
+                control/types/PropertyTypeBool.h
+                control/types/PropertyTypeEnum.cpp
+                control/types/PropertyTypeEnum.h
+                control/types/PropertyTypeOint.cpp
+                control/types/PropertyTypeOint.h
+                control/types/PropertyTypePath.cpp
+                control/types/PropertyTypePath.h
+                control/types/PropertyTypeUint.cpp
+                control/types/PropertyTypeUint.h
+
+                fs/AbstractMountFileSystem.cpp
+                fs/AbstractMountFileSystem.h
+                fs/ConfFileSystem.cpp
+                fs/ContentManager.h
+                fs/ContentManager.cpp
+                fs/RegularFileSystem.h
+                fs/RegularFileSystem.cpp
+                fs/IContentHandle.h
+                fs/IFileSystem.h
+                fs/IDirectoryIterator.h
+                fs/INode.h
 
                 presentation/FuseGate.h
                 presentation/FuseGate.cpp
@@ -72,8 +117,6 @@ set(SRC_LIST	main.cpp
                 utils/ExponentialBackoff.cpp
                 utils/log.h
                 utils/log.cpp
-                utils/PathManager.h
-                utils/PathManager.cpp
 
                 )
 

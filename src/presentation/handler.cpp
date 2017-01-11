@@ -16,7 +16,9 @@
 
 #define G2F_DATA (static_cast<FuseGate*>(fuse_get_context()->private_data))
 #define NODEPTR_TO_FH(nptr, fh) (fh=reinterpret_cast<int64_t>(nptr))
-#define FH_TO_NODEPTR(fh, nptr) (nptr=reinterpret_cast<Node*>(fh))
+#define FH_TO_NODEPTR(fh, nptr) (nptr=reinterpret_cast<INode*>(fh))
+#define CONTENTHANDLEPTR_2_FH(chn) (reinterpret_cast<int64_t>(chn))
+#define FH_2_CONTENTHANDLEPTR(fh) (reinterpret_cast<IContentHandle*>(fh))
 
 /** Get file attributes.
   *
@@ -28,12 +30,11 @@ int g2f_getattr(const char *path, struct stat * statbuf)
 {
 	G2F_LOG_SCOPE();
 	G2F_LOG("path=" << path);
-	Node *n=G2F_DATA->getMeta(path);
+	INode *n=G2F_DATA->getINode(path);
 	if(!n)
 		return -ENOENT;
-	Tree &mt=G2F_DATA->metaTree();
-	G2F_LOG("node id=" << mt.id(n) << ", name=" << mt.name(n));
-	mt.fillAttr(n,*statbuf);
+	G2F_LOG("node id=" << n->getId() << ", name=" << n->getName());
+	n->fillAttr(*statbuf);
 	G2F_LOG("Attribute filled");
 	return 0;
 }
@@ -52,11 +53,10 @@ int g2f_opendir (const char *path, struct fuse_file_info *fi)
 {
 	G2F_LOG_SCOPE();
 	G2F_LOG("path=" << path);
-	Node *n=G2F_DATA->getMeta(path);
+	INode *n=G2F_DATA->getINode(path);
 	if(!n)
 		return -ENOENT;
-	Tree &mt=G2F_DATA->metaTree();
-	if(!mt.isFolder(n))
+	if(!n->isFolder())
 		return -ENOTDIR;
 	NODEPTR_TO_FH(n,fi->fh);
 	return 0;
@@ -88,24 +88,23 @@ int g2f_readdir (const char *path, void *buf, fuse_fill_dir_t filler, off_t offs
 {
 	G2F_LOG_SCOPE();
 	G2F_LOG("path=" << path << ", offset=" << offset);
-	Node *n=0;
+	INode *n=0;
 	FH_TO_NODEPTR(fi->fh,n);
 	if(!n)
 		return -ENOENT;
-	Tree &mt=G2F_DATA->metaTree();
-	if(!mt.isFolder(n))
+	if(!n->isFolder())
 		return -ENOTDIR;
-	G2F_LOG("node id=" << mt.id(n) << ", name=" << mt.name(n));
-	Tree::IDirectoryIteratorUPtr reader=G2F_DATA->getDirectoryIterator(n);
+	G2F_LOG("node id=" << n->getId() << ", name=" << n->getName());
+	IDirectoryIteratorPtr reader=n->getDirectoryIterator();
 	if(reader)
 	{
 		struct stat stbuf;
 		while(reader->hasNext())
 		{
-			Node *next=reader->next();
-			mt.fillAttr(next,stbuf);
-			G2F_LOG("dir entry id=" << mt.id(next) << ", name=" << mt.name(next));
-			if(filler(buf,mt.name(next).c_str(),&stbuf, 0)==1)
+			INode *next=reader->next();
+			next->fillAttr(stbuf);
+			G2F_LOG("dir entry id=" << next->getId() << ", name=" << next->getName());
+			if(filler(buf,next->getName().c_str(),&stbuf, 0)==1)
 				return -ENOMEM;
 		}
 	}
@@ -147,17 +146,22 @@ int g2f_open (const char *path, struct fuse_file_info *fi)
 {
 	G2F_LOG_SCOPE();
 	G2F_LOG("path=" << path << ", flags=" << fi->flags);
-	Node *n=G2F_DATA->getMeta(path);
+	INode *n=G2F_DATA->getINode(path);
 	if(!n)
 		return -ENOENT;
-	Tree &mt=G2F_DATA->metaTree();
-	G2F_LOG("node id=" << mt.id(n) << ", name=" << mt.name(n));
-	if(mt.isFolder(n))
+	G2F_LOG("node id=" << n->getId() << ", name=" << n->getName());
+	if(n->isFolder())
 		return -EISDIR;
 	fi->nonseekable=0;
-	int err=G2F_DATA->openContent(n,fi->flags,fi->fh);
+	IContentHandle *chn=n->openContent(fi->flags);
+	assert(chn!=0);
+	int err=chn->getError();
+	if(err)
+		delete chn;
+	else
+		fi->fh=CONTENTHANDLEPTR_2_FH(chn);
 	G2F_LOG("errno=" << err << ", fd=" << fi->fh);
-	return -errno;
+	return -err;
 }
 
 /** Read data from an open file
@@ -176,7 +180,8 @@ int g2f_read (const char *path, char *buf, size_t size, off_t offset, struct fus
 	G2F_LOG_SCOPE();
 	G2F_LOG("path=" << path << ", fd=" << fi->fh << ", size=" << size << ", offset=" << offset);
 
-	int ret=G2F_DATA->readContent(fi->fh,buf,size,offset);
+	IContentHandle *chn=FH_2_CONTENTHANDLEPTR(fi->fh);
+	int ret=chn->read(buf,size,offset);
 	G2F_LOG("ret=" << ret);
 	return ret;
 }
@@ -199,9 +204,11 @@ int g2f_release (const char *path, struct fuse_file_info *fi)
 {
 	G2F_LOG_SCOPE();
 	G2F_LOG("path=" << path << ", fd=" << fi->fh);
-	int err=G2F_DATA->closeContent(fi->fh);
+	IContentHandle *chn=FH_2_CONTENTHANDLEPTR(fi->fh);
+	int err=chn->close();
+	delete chn;
 	G2F_LOG("errno=" << err);
-	return -errno;
+	return -err;
 }
 
 /** Read the target of a symbolic link
