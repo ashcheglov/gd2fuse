@@ -36,6 +36,8 @@ namespace google
 
 // TODO Watch service to detect modification
 
+#define G2F_GDRIVE_CONF_FILENAME	"gdrive.conf"
+
 const std::string ID_ROOT("root");
 const std::string FILE_RESOURCE_FIELD("etag,title,mimeType,createdDate,modifiedDate,lastViewedByMeDate,originalFilename,fileSize,md5Checksum");
 MimePair FOLDER_MIME("application","vnd.google-apps.folder");
@@ -53,7 +55,7 @@ void gdt2timespec(const g_cli::DateTime &from, timespec &to)
 void sp2md5sign(const g_api::StringPiece &str, MD5Signature &ret)
 {
 	if(str.size()!=32)
-		throw G2F_EXCEPTION("Can't recognize MD5 hash. Wrong length =%1, must be %2").arg(str.size()).arg(32);
+		G2F_EXCEPTION("Can't recognize MD5 hash. Wrong length =%1, must be %2").arg(str.size()).arg(32).throwIt(G2FErrorCodes::MD5Error);
 	boost::algorithm::unhex(str.begin(),str.end(),ret.begin());
 }
 
@@ -287,7 +289,7 @@ public:
 		if(items && items->isArray())
 		{
 			// TODO Implement with Batch mode (see google-api-cpp-client/src/googleapis/client/transport/http_request_batch.h)
-			for(int i=0;i<items->size();++i)
+			for(int i=0;i<boost::numeric_cast<int>(items->size());++i)
 			{
 				const Json::Value& e=(*items)[i];
 				ret->vals.push_back(e.get("id","").asString());
@@ -349,6 +351,31 @@ private:
 
 
 
+/**
+ * @brief produce HttpTransport
+ */
+class HttpTransportFactory
+{
+public:
+	HttpTransportFactory(const sptr<g_cli::HttpTransportLayerConfig> &conf)
+		:_httpConf(conf)
+	{}
+
+	g_cli::HttpTransport *createTransport() const
+	{
+		g_utl::Status status;
+		uptr<g_cli::HttpTransport> ret(_httpConf->NewDefaultTransport(&status));
+		if (!status.ok())
+			G2F_EXCEPTION("Error creating HTTP transport").arg(status.error_code()).arg(status.ToString()).throwIt(G2FErrorCodes::HttpTransportError);
+		return ret.release();
+	}
+
+private:
+	sptr<g_cli::HttpTransportLayerConfig> _httpConf;
+};
+
+
+
 //
 //   OAuth2 process
 //
@@ -357,8 +384,8 @@ class GoogleOAuth2 : public IOAuth2Process
 {
 	// IOAuth2Process interface
 public:
-	GoogleOAuth2(g_cli::HttpTransport *trt,const std::string &accId,const fs::path &secretFile,const fs::path &credentialHomeDir)
-		: _trt(trt),
+	GoogleOAuth2(const HttpTransportFactory& trf,const std::string &accId,const fs::path &secretFile,const fs::path &credentialHomeDir)
+		: _trf(trf),
 		  _accId(accId),
 		  _secretFile(secretFile),
 		  _credentialHomeDir(credentialHomeDir)
@@ -375,27 +402,31 @@ public:
 	{
 		try
 		{
-			Auth a(_trt,_secretFile);
+			Auth a(_trf.createTransport(),_secretFile);
 			a.setShellCallback(std::string());
 			_oa2c=a.auth(_accId,_credentialHomeDir);
 		}
 		catch(const std::exception &e)
 		{
 			_errorMessage=e.what();
+			return false;
 		}
+		return true;
 	}
-	virtual int finishNativeApp(const std::string &authCode) override
+	virtual bool finishNativeApp(const std::string &authCode) override
 	{
 		try
 		{
-			Auth a(_trt,_secretFile);
+			Auth a(_trf.createTransport(),_secretFile);
 			a.setShellCallback(authCode);
 			_oa2c=a.auth(_accId,_credentialHomeDir);
 		}
 		catch(const std::exception &e)
 		{
 			_errorMessage=e.what();
+			return false;
 		}
+		return true;
 	}
 
 	OAuth2CredentialPtr getAuthToken()
@@ -404,7 +435,7 @@ public:
 	}
 
 private:
-	g_cli::HttpTransport *_trt=nullptr;
+	const HttpTransportFactory& _trf;
 	std::string _accId;
 	fs::path _secretFile;
 	fs::path _credentialHomeDir;
@@ -511,10 +542,10 @@ public:
 
 	GoogleProviderSession(const std::string &accId,sptr<g_cli::HttpTransportLayerConfig> conf,IProvider* parent)
 		: _accId(accId),
-		  _httpConf(conf),
+		  _transportFactory(conf),
 		  _parent(parent)
 	{
-		_service=std::make_shared<g_drv::DriveService>(createTransport().release());
+		_service=std::make_shared<g_drv::DriveService>(_transportFactory.createTransport());
 
 		IConfigurationPtr current=std::make_shared<GoogleSessionConfiguration>(parent->getConfiguration()->getPaths(),_accId);
 		_conf=std::make_shared<ChainedConfiguration>(parent->getConfiguration(),current);
@@ -529,7 +560,7 @@ public:
 
 	virtual IOAuth2ProcessPtr createOAuth2Process() override
 	{
-		return std::make_shared<GoogleOAuth2>(_service->transport(),_accId,getSecretFile(),getCredentialHomeDir());
+		return std::make_shared<GoogleOAuth2>(_transportFactory,_accId,getSecretFile(),getCredentialHomeDir());
 	}
 
 	virtual IProvider *getProvider() override
@@ -551,7 +582,7 @@ public:
 	{
 		if(!_authCred)
 		{
-			Auth a(createTransport().release(),getSecretFile());
+			Auth a(_transportFactory.createTransport(),getSecretFile());
 			a.setErrorCallback();
 			_authCred=a.auth(_accId,getCredentialHomeDir());
 		}
@@ -570,18 +601,9 @@ public:
 		return confDir/"auth.info";
 	}
 
-	uptr<g_cli::HttpTransport> createTransport()
-	{
-		g_utl::Status status;
-		uptr<g_cli::HttpTransport> ret(_httpConf->NewDefaultTransport(&status));
-		if (!status.ok())
-			throw G2F_EXCEPTION("Error creating HTTP transport").arg(status.error_code()).arg(status.ToString());
-		return ret;
-	}
-
 private:
 	std::string _accId;
-	sptr<g_cli::HttpTransportLayerConfig> _httpConf;
+	HttpTransportFactory _transportFactory;
 	sptr<g_drv::DriveService> _service;
 	OAuth2CredentialPtr _authCred;
 	IProvider *_parent=nullptr;
@@ -608,7 +630,7 @@ const AbstractStaticInitPropertiesList::PropDefi propsDefi[]=
 	"export_gdoc_spreadsheets",		IPropertyType::ENUM,	"gdds",		"csv",				true,	"Format to export GDoc Spreadsheets.",
 	"export_gdoc_drawings",			IPropertyType::ENUM,	"gddd",		"jpeg",				true,	"Format to export GDoc Drawings.",
 	"export_gdoc_presentations",	IPropertyType::ENUM,	"gddp",		"plain_text",		true,	"Format to export GDoc Presentations.",
-	"disable-ssl-verify",			IPropertyType::BOOL,	0,			"false",			true,	"Google servers certificate's checking will be disabled.",
+	"use-ssl-verify",				IPropertyType::BOOL,	0,			"true",				false,	"Google servers certificate's checking will be disabled.",
 	"ssl-ca-path",					IPropertyType::PATH,	0,			"",					false,	"path to the SSL certificate authority validation data."
 };
 
@@ -696,7 +718,7 @@ public:
 	GoogleConfiguration(const IConfigurationPtr &parent)
 	{
 		_pm=createNextLevelWrapperPathManager(parent->getPaths(),"gdrive");
-		_props=std::make_shared<GoogleProviderProperties>(_pm->getDir(IPathManager::CONFIG));
+		_props=std::make_shared<GoogleProviderProperties>(_pm->getDir(IPathManager::CONFIG)/G2F_GDRIVE_CONF_FILENAME);
 	}
 
 	// IConfiguration interface
@@ -751,7 +773,7 @@ public:
 
 	virtual ISupportedConversionPtr getSupportedConversion() override
 	{
-		// TODO Implement
+		// TODO
 		G2F_EXCEPTION("GoogleProvider::getSupportedConversion()").throwIt(G2FErrorCodes::NotImplemented);
 		return ISupportedConversionPtr();
 	}

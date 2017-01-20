@@ -27,8 +27,8 @@ BOOST_LOG_GLOBAL_LOGGER(g2flog,logging::sources::logger_mt)
 #endif
 
 #define G2F_LOG_INIT()	g2fLogInit()
-#define G2F_LOG(message) if(g2fLogInit) BOOST_LOG(g2flog::get()) << message
-#define G2F_LOG_TAG(tag,message)  if(g2fTraceInit) BOOST_LOG(g2flog::get()) << logging::add_value("Tag", tag) << message
+#define G2F_LOG(message) if(g2fLogInitFlag) BOOST_LOG(g2flog::get()) << message
+#define G2F_LOG_TAG(tag,message)  if(g2fLogInitFlag) BOOST_LOG(g2flog::get()) << logging::add_value("Tag", tag) << message
 
 
 #else	// G2F_USE_LOG

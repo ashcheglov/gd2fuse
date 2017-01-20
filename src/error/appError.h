@@ -19,8 +19,12 @@ enum G2FErrorCodes
 	NotSupported,
 	CouldntDetermineProvider,
 	PropertyNotFound,
-	CantOpenConfFile,
-	ErrorModifyConfFile
+	BadFileOperation,
+	ErrorModifyConfFile,
+	UnknownEnvVariable,
+	PathError,
+	AuthenticationFailed,
+	MD5Error
 };
 
 namespace boost

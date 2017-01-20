@@ -27,6 +27,7 @@ public:
 	virtual MD5Signature getMD5() =0;
 	virtual IDirectoryIteratorPtr getDirectoryIterator() =0;
 	virtual IContentHandle* openContent(int flags) =0;
+	virtual posix_error_code truncate(off_t newSize) =0;
 
 	virtual ~INode() {}
 };

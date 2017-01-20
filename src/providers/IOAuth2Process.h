@@ -11,7 +11,7 @@ public:
 	virtual bool isFinished() =0;
 	virtual std::string getError() =0;
 	virtual bool startNativeApp() =0;
-	virtual int finishNativeApp(const std::string &authKey) =0;
+	virtual bool finishNativeApp(const std::string &authKey) =0;
 
 	virtual ~IOAuth2Process() {}
 };

@@ -59,6 +59,11 @@ public:
 		return Application::instance()->startTime();
 	}
 
+	virtual bool resetToDefault() override
+	{
+		return false;
+	}
+
 private:
 	const AbstractStaticInitPropertiesList::PropDefi& _p;
 	IPropertyTypePtr _type;

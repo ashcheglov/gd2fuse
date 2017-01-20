@@ -37,7 +37,8 @@ bool updateConf(std::fstream &f,const std::string &name,const std::string &val)
 		if(offset!=-1)
 		{
 			// Read the rest of file
-			std::string rest(std::istream_iterator<std::string::value_type>(f),
+			std::string rest;
+			rest.assign(std::istream_iterator<std::string::value_type>(f),
 										   std::istream_iterator<std::string::value_type>());
 			// Move file input pointer
 			f.seekg(offset);
@@ -100,7 +101,7 @@ public:
 		{
 			fs::fstream f(p);
 			if(!f)
-				G2F_EXCEPTION("Can't open file '%1' while readed propery '%2'").arg(p.string()).arg(getName()).throwIt(G2FErrorCodes::CantOpenConfFile);
+				G2F_EXCEPTION("Can't open file '%1' while reading propery '%2'").arg(p.string()).arg(getName()).throwIt(G2FErrorCodes::BadFileOperation);
 			f.exceptions(std::fstream::failbit|std::fstream::badbit);
 			bool readed=readConf(f,_upstream->getName(),_value);
 			if(readed)
@@ -124,15 +125,19 @@ public:
 			}
 			fs::fstream f(p);
 			if(!f)
-				return G2FError(G2FErrorCodes::CantOpenConfFile).setDetail(p.string());
+				G2F_EXCEPTION(G2FMESSAGE("Can not open file '%1'")).arg(p).throwIt(G2FErrorCodes::BadFileOperation);
 			f.exceptions(std::fstream::failbit|std::fstream::badbit);
 			bool changed=updateConf(f,_upstream->getName(),val);
 			if(changed)
 				clock_gettime(CLOCK_REALTIME,&_lastChange);
 		}
+		catch(const G2FException &e)
+		{
+			return e.code();
+		}
 		catch(const std::exception &e)
 		{
-			return G2FError(G2FErrorCodes::ErrorModifyConfFile).setDetail(p.string()+": "+e.what());
+			return G2FError(G2FErrorCodes::ErrorModifyConfFile).setDetail(e.what());
 		}
 		return G2FError();
 	}
@@ -162,6 +167,12 @@ public:
 		if(!ISSET_TIMESPEC(_lastChange))
 			return _upstream->getLastChangeTime();
 		return _lastChange;
+	}
+
+	virtual bool resetToDefault() override
+	{
+		// TODO @
+		return false;
 	}
 
 private:

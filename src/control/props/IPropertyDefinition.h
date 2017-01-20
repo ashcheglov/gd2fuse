@@ -19,6 +19,7 @@ public:
 	virtual bool isRuntimeChange() =0;
 	virtual std::string getDefaultValue() =0;
 	virtual timespec getLastChangeTime() =0;
+	virtual bool resetToDefault() =0;
 
 	virtual ~IPropertyDefinition() {}
 };

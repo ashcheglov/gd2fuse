@@ -11,7 +11,6 @@ public:
 
 	virtual INode* getRoot() =0;
 	virtual INode* get(const fs::path &p) =0;
-	virtual bool mount(const fs::path &mountPoint,IFileSystemPtr fs) =0;
 
 	virtual ~IFileSystem() {}
 };

@@ -6,9 +6,9 @@
 #include "Configuration.h"
 
 Application::Application(const std::string &email, int argc, char *argv[], const fs::path &manualConf)
-	: _email(email),
-	  _argc(argc),
-	  _argv(argv)
+	: _argc(argc),
+	  _argv(argv),
+	  _email(email)
 {
 	_conf=createGlobalConfiguration(manualConf);
 	if(_email.empty())
@@ -35,6 +35,7 @@ Application &Application::setReadOnly(bool value)
 Application &Application::setProviderArgs(const Application::ProviderArgs &prArgs)
 {
 	_prArgs=prArgs;
+	return *this;
 }
 
 const IConfigurationPtr &Application::getConfiguration()

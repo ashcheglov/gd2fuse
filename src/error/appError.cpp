@@ -1,6 +1,17 @@
 #include "appError.h"
 #include "utils/decls.h"
 
+/*
+static struct CodeDef
+{
+	G2FErrorCodes code;
+	const char *desc;
+}
+codes[]=
+{
+	WrongAppArguments,		G2FMESSAGE("Wrong application arguments")
+}*/
+
 // TODO Check default_category()
 class G2FErrorCategory : public err::error_category
 {
@@ -39,8 +50,16 @@ public:
 			return G2FMESSAGE("Could not detemine cloud provider by account name");
 		case PropertyNotFound:
 			return G2FMESSAGE("Unknown property");
-		case CantOpenConfFile:
-			return G2FMESSAGE("Can not open configuration file");
+		case BadFileOperation:
+			return G2FMESSAGE("Fail to work with file");
+		case UnknownEnvVariable:
+			return G2FMESSAGE("Can not find environment variable");
+		case PathError:
+			return G2FMESSAGE("Error in path value");
+		case AuthenticationFailed:
+			return G2FMESSAGE("Authentication failed");
+		case MD5Error:
+			return G2FMESSAGE("MD5 error");
 		}
 		return G2FMESSAGE("Unknown error");
 	}
@@ -52,6 +71,12 @@ public:
 			int cond=condition.value();
 			switch (code)
 			{
+			case PathError:
+				{
+					if(cond==err::errc::bad_address)
+						return true;
+				}
+				break;
 			case PropertyNotFound:
 			case CouldntDetermineProvider:
 			case WrongAppArguments:
@@ -61,7 +86,7 @@ public:
 				}
 				break;
 			case ErrorModifyConfFile:
-			case CantOpenConfFile:
+			case BadFileOperation:
 			case HttpReadError:
 			case HttpTransportError:
 			case HttpClientError:
@@ -71,6 +96,7 @@ public:
 						return true;
 				}
 				break;
+			case AuthenticationFailed:
 			case HttpPermissionError:
 				{
 					if(cond==err::errc::permission_denied)
@@ -124,6 +150,7 @@ G2FError::G2FError(int val, const boost::system::error_category &cat)
 G2FError &G2FError::setDetail(const std::string &detail)
 {
 	_detail=detail;
+	return *this;
 }
 
 const std::string &G2FError::getDetail()
@@ -133,7 +160,8 @@ const std::string &G2FError::getDetail()
 
 G2FError &G2FError::operator=(const boost::system::error_code &ec) BOOST_SYSTEM_NOEXCEPT
 {
-	static_cast<err::error_code>(*this)=ec;
+	this->assign(ec.value(),ec.category());
+	return *this;
 }
 
 bool operator==(const G2FError &lhs, const G2FError &rhs) BOOST_SYSTEM_NOEXCEPT

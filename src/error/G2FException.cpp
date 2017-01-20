@@ -123,11 +123,11 @@ namespace
 // %N - argument placeholder
 // {} - conditional block, separated by '|'
 // Duplicating control symbols ({}|) acts like a shield ("{{" -> '{')
-// Using standard shield symbol '\' inside string literals make code unreadable
+// Using standard shield symbol '\' inside string literals make literals unreadable
 std::string _compileMessage(const std::string &message,const std::vector<std::string> &args)
 {
 	std::string ret;
-	if(message.empty())
+	if(!message.empty())
 	{
 		// массив с указанием переданных аргументов
 		UsedArgsList usedArgs;
@@ -201,13 +201,19 @@ G2FExceptionBuilder &G2FExceptionBuilder::reason(const std::string &reason)
 
 void G2FExceptionBuilder::throwIt(G2FError code)
 {
+	BOOST_THROW_EXCEPTION(getIt(code));
+}
+
+G2FException G2FExceptionBuilder::getIt(G2FError code)
+{
 	G2FException e(code);
 	const std::string &m=_compileMessage(_message,_args);
 	if(!m.empty())
 		e._error.setDetail(m);
 	if(!_reason.empty())
 		e << g2f_error_detail_string(_reason);
-	BOOST_THROW_EXCEPTION(e);
+	e._buildWhat();
+	return e;
 }
 
 G2FException::G2FException(const G2FError &errorCode)
@@ -215,7 +221,7 @@ G2FException::G2FException(const G2FError &errorCode)
 	_error=errorCode;
 }
 
-const G2FError &G2FException::code()
+const G2FError &G2FException::code() const
 {
 	return _error;
 }

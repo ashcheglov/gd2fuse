@@ -2,7 +2,8 @@ cmake_minimum_required(VERSION 2.8.11)
 
 #set(CMAKE_AUTOMOC ON)
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
-#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall")
+#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wshadow -Weffc++")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wno-switch -Wno-unused-local-typedefs -Wno-unused-variable")
 option(Boost_USE_STATIC_LIBS "Boost static libs" OFF)
 option(Boost_USE_MULTITHREADED ON)
 option(Boost_USE_STATIC_RUNTIME OFF)
@@ -49,8 +50,6 @@ set(SRC_LIST	main.cpp
                 control/props/IPropertiesList.h
                 control/props/IPropertyDefinition.h
                 control/props/IPropertyIterator.h
-                control/props/Property.cpp
-                control/props/Property.h
 
                 control/types/IPropertyType.cpp
                 control/types/IPropertyType.h
@@ -68,13 +67,14 @@ set(SRC_LIST	main.cpp
                 control/types/PropertyTypeUint.cpp
                 control/types/PropertyTypeUint.h
 
-                fs/AbstractMountFileSystem.cpp
-                fs/AbstractMountFileSystem.h
                 fs/ConfFileSystem.cpp
                 fs/ContentManager.h
                 fs/ContentManager.cpp
+                fs/JoinedFileSystem.cpp
+                fs/JoinedFileSystem.h
                 fs/RegularFileSystem.h
                 fs/RegularFileSystem.cpp
+                fs/IContentHandle.cpp
                 fs/IContentHandle.h
                 fs/IFileSystem.h
                 fs/IDirectoryIterator.h

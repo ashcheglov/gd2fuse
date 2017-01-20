@@ -13,6 +13,8 @@ using sptr=std::shared_ptr<T>;
 
 #define G2F_APP_NAME	"gd2fuse"
 
+typedef int posix_error_code;
+
 // Stub for localization
 #define G2FMESSAGE(message) message
 

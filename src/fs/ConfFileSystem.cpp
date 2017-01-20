@@ -1,5 +1,5 @@
 #include "IFileSystem.h"
-#include "AbstractMountFileSystem.h"
+#include "JoinedFileSystem.h"
 #include <sstream>
 #include "control/IConfiguration.h"
 #include "control/Application.h"
@@ -65,6 +65,7 @@ std::string exportPropery(IPropertyDefinition& prop)
 			o << ed->getEntry(i);
 		}
 	}
+	o << std::endl;
 	return o.str();
 }
 
@@ -78,6 +79,8 @@ class PropNode : public AbstractNodeStub
 {
 
 public:
+	static const int MAX_SIZE_CONF_FILE=100;
+
 	class ContentHandle : public IContentHandle
 	{
 	public:
@@ -88,11 +91,24 @@ public:
 		{}
 		// IContentHandle interface
 	public:
+		virtual void fillAttr(struct stat &statbuf) override
+		{
+			_parent->fillAttr(statbuf);
+			statbuf.st_size=_s.size();
+		}
+		virtual bool useDirectIO() override
+		{
+			return true;
+		}
+		virtual posix_error_code flush() override
+		{
+			return 0;
+		}
 		virtual INode *getMeta() override
 		{
 			return _parent;
 		}
-		virtual int getError() override
+		virtual posix_error_code getError() override
 		{
 			return 0;
 		}
@@ -100,7 +116,7 @@ public:
 		{
 			return boost::numeric_cast<int>(_s.copy(buf,len,offset));
 		}
-		virtual int close() override
+		virtual posix_error_code close() override
 		{
 			return 0;
 		}
@@ -108,6 +124,8 @@ public:
 		INode *_parent=nullptr;
 		IPropertyDefinitionPtr _p;
 		std::string _s;
+
+
 	};
 
 
@@ -126,11 +144,9 @@ public:
 	}
 	virtual void fillAttr(struct stat &statbuf) override
 	{
-		statbuf.st_size=0;
-		statbuf.st_mode|=S_IFREG;
-		// set access mode
-
-		statbuf.st_mode|=S_IRUSR|S_IRGRP;
+		G2F_CLEAN_STAT(statbuf);
+		//statbuf.st_size=10;
+		statbuf.st_mode=S_IFREG|S_IRUSR|S_IRGRP;
 		if(_p->isRuntimeChange())
 			statbuf.st_mode|=S_IWUSR;
 		statbuf.st_nlink=1;
@@ -161,6 +177,16 @@ public:
 	virtual IContentHandle *openContent(int flags) override
 	{
 		return new ContentHandle(this,_p,exportPropery(*_p));
+	}
+	virtual posix_error_code truncate(off_t newSize) override
+	{
+		if(!_p->isRuntimeChange())
+			return EACCES;
+		if(newSize>MAX_SIZE_CONF_FILE)
+			return EFBIG;
+		if(newSize==0)
+			_p->resetToDefault();
+		return 0;
 	}
 
 private:
@@ -225,11 +251,9 @@ public:
 	}
 	virtual void fillAttr(struct stat &statbuf) override
 	{
-		statbuf.st_size=0;
-		statbuf.st_mode|=S_IFDIR;
-
+		G2F_CLEAN_STAT(statbuf);
 		// TODO Make configurable?
-		statbuf.st_mode|=S_IRUSR|S_IXUSR|S_IRGRP|S_IWGRP;
+		statbuf.st_mode=S_IFDIR|S_IRWXU|S_IRGRP|S_IXGRP;
 		statbuf.st_nlink=1;
 		statbuf.st_uid=Application::getUID();
 		statbuf.st_gid=Application::getGID();
@@ -252,6 +276,11 @@ public:
 		return nullptr;
 	}
 
+	virtual posix_error_code truncate(off_t newSize) override
+	{
+		return EISDIR;
+	}
+
 	INode* get(const fs::path &fileName)
 	{
 		for(const auto& p : _props)
@@ -261,6 +290,7 @@ public:
 		}
 		return nullptr;
 	}
+
 
 private:
 	PropList _props;
@@ -276,7 +306,7 @@ G2F_DECLARE_PTR(PropRootNode);
  * Whole FS around IConfiguration
  *
  * *************************************/
-class ConfigurationFSWrapper : public AbstractMountFileSystem
+class ConfigurationFSWrapper : public IFileSystem
 {
 public:
 	ConfigurationFSWrapper(const IConfigurationPtr &conf)
@@ -296,9 +326,6 @@ public:
 	{
 		if(p=="/")
 			return getRoot();
-		INode * m=findInMounts(p);
-		if(m)
-			return m;
 		return _root->get(p.filename());
 	}
 

@@ -46,6 +46,7 @@ fs::path AbstractPathManager::getDir(Type type)
 		return *p;
 	}
 	G2F_EXCEPTION("Unknown directory type").throwIt(G2FErrorCodes::NotSupported);
+	return fs::path();
 }
 
 bool AbstractPathManager::isExists(Type type)

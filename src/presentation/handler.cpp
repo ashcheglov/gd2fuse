@@ -32,7 +32,10 @@ int g2f_getattr(const char *path, struct stat * statbuf)
 	G2F_LOG("path=" << path);
 	INode *n=G2F_DATA->getINode(path);
 	if(!n)
+	{
+		G2F_LOG("Node is not found");
 		return -ENOENT;
+	}
 	G2F_LOG("node id=" << n->getId() << ", name=" << n->getName());
 	n->fillAttr(*statbuf);
 	G2F_LOG("Attribute filled");
@@ -122,7 +125,7 @@ int g2f_releasedir (const char *path, struct fuse_file_info *fi)
 	G2F_LOG("path=" << path);
 	G2F_LOG("ret=" << ret);
 	fi->fh=0;
-	return ret;
+	return -ret;
 }
 
 /** File open operation
@@ -154,6 +157,7 @@ int g2f_open (const char *path, struct fuse_file_info *fi)
 		return -EISDIR;
 	fi->nonseekable=0;
 	IContentHandle *chn=n->openContent(fi->flags);
+	fi->direct_io=chn->useDirectIO()?1:0;
 	assert(chn!=0);
 	int err=chn->getError();
 	if(err)
@@ -221,7 +225,9 @@ int g2f_release (const char *path, struct fuse_file_info *fi)
   */
 int g2f_readlink (const char *path, char *link, size_t size)
 {
-	return 0;
+	G2F_LOG_SCOPE();
+	G2F_LOG("path=" << path << ", UNIMPLEMENTED");
+	return -ENOSYS;
 }
 
 /** Create a file node
@@ -232,7 +238,9 @@ int g2f_readlink (const char *path, char *link, size_t size)
   */
 int g2f_mknod(const char *path, mode_t mode, dev_t dev)
 {
-	return 0;
+	G2F_LOG_SCOPE();
+	G2F_LOG("path=" << path << ", UNIMPLEMENTED");
+	return -ENOSYS;
 }
 
 /** Create a directory
@@ -243,55 +251,83 @@ int g2f_mknod(const char *path, mode_t mode, dev_t dev)
   * */
 int g2f_mkdir(const char *path, mode_t mode)
 {
-	return 0;
+	G2F_LOG_SCOPE();
+	G2F_LOG("path=" << path << ", UNIMPLEMENTED");
+	return -ENOSYS;
 }
 
 /** Remove a file */
 int g2f_unlink (const char *path)
 {
-	return 0;
+	G2F_LOG_SCOPE();
+	G2F_LOG("path=" << path << ", UNIMPLEMENTED");
+	return -ENOSYS;
 }
 
 /** Remove a directory */
 int g2f_rmdir (const char *path)
 {
-	return 0;
+	G2F_LOG_SCOPE();
+	G2F_LOG("path=" << path << ", UNIMPLEMENTED");
+	return -ENOSYS;
 }
 
 /** Create a symbolic link */
 int g2f_symlink (const char *path, const char *link)
 {
-	return 0;
+	G2F_LOG_SCOPE();
+	G2F_LOG("path=" << path << ", UNIMPLEMENTED");
+	return -ENOSYS;
 }
 
 /** Rename a file */
 int g2f_rename (const char *path, const char *newPath)
 {
-	return 0;
+	G2F_LOG_SCOPE();
+	G2F_LOG("path=" << path << ", UNIMPLEMENTED");
+	return -ENOSYS;
 }
 
 /** Create a hard link to a file */
 int g2f_link (const char *path, const char *newPath)
 {
-	return 0;
+	G2F_LOG_SCOPE();
+	G2F_LOG("path=" << path << ", UNIMPLEMENTED");
+	return -ENOSYS;
 }
 
 /** Change the permission bits of a file */
 int g2f_chmod (const char *path, mode_t mode)
 {
-	return 0;
+	G2F_LOG_SCOPE();
+	G2F_LOG("path=" << path << ", UNIMPLEMENTED");
+	return -ENOSYS;
 }
 
 /** Change the owner and group of a file */
 int g2f_chown (const char *path, uid_t uid, gid_t gid)
 {
-	return 0;
+	G2F_LOG_SCOPE();
+	G2F_LOG("path=" << path << ", UNIMPLEMENTED");
+	return -ENOSYS;
 }
 
 /** Change the size of a file */
 int g2f_truncate (const char *path, off_t newSize)
 {
-	return 0;
+	// TODO
+	G2F_LOG_SCOPE();
+	G2F_LOG("path=" << path << ", newSize=" << newSize);
+
+	INode *n=G2F_DATA->getINode(path);
+	if(!n)
+		return -ENOENT;
+	if(n->isFolder())
+		return -EISDIR;
+	//EPERM
+	int ret=n->truncate(newSize);
+	G2F_LOG("ret=" << ret);
+	return -ret;
 }
 
 /** Write data to an open file
@@ -305,7 +341,9 @@ int g2f_truncate (const char *path, off_t newSize)
 int g2f_write (const char *path, const char *buf, size_t size, off_t offset,
 			   struct fuse_file_info *fi)
 {
-	return 0;
+	G2F_LOG_SCOPE();
+	G2F_LOG("path=" << path << ", UNIMPLEMENTED");
+	return -ENOSYS;
 }
 
 /** Get file system statistics
@@ -318,6 +356,8 @@ int g2f_write (const char *path, const char *buf, size_t size, off_t offset,
 int g2f_statfs (const char *path, struct statvfs *statv)
 {
 	// TODO g2f_statfs
+	G2F_LOG_SCOPE();
+	G2F_LOG("path=" << path << ", UNIMPLEMENTED");
 	return -ENOSYS;
 }
 
@@ -346,7 +386,12 @@ int g2f_statfs (const char *path, struct statvfs *statv)
   */
 int g2f_flush (const char *path, struct fuse_file_info *fi)
 {
-	return 0;
+	G2F_LOG_SCOPE();
+	G2F_LOG("path=" << path << ", fd=" << fi->fh);
+
+	int ret=FH_2_CONTENTHANDLEPTR(fi->fh)->flush();
+	G2F_LOG("ret=" << ret);
+	return -ret;
 }
 
 /** Synchronize file contents
@@ -358,7 +403,9 @@ int g2f_flush (const char *path, struct fuse_file_info *fi)
   */
 int g2f_fsync (const char *path, int datasync, struct fuse_file_info *fi)
 {
-	return 0;
+	G2F_LOG_SCOPE();
+	G2F_LOG("path=" << path << ", UNIMPLEMENTED");
+	return -ENOSYS;
 }
 
 /** Synchronize directory contents
@@ -370,7 +417,9 @@ int g2f_fsync (const char *path, int datasync, struct fuse_file_info *fi)
   */
 int g2f_fsyncdir (const char *path, int datasync, struct fuse_file_info *fi)
 {
-	return 0;
+	G2F_LOG_SCOPE();
+	G2F_LOG("path=" << path << ", UNIMPLEMENTED");
+	return -ENOSYS;
 }
 
 /**
@@ -385,7 +434,7 @@ int g2f_fsyncdir (const char *path, int datasync, struct fuse_file_info *fi)
   */
 void *g2f_init (struct fuse_conn_info *conn)
 {
-	conn->async_read=1;
+	conn->async_read=0;
 	return G2F_DATA;
 }
 
@@ -413,7 +462,9 @@ void g2f_destroy (void *userData)
   */
 int g2f_access (const char *path, int mask)
 {
-	return 0;
+	G2F_LOG_SCOPE();
+	G2F_LOG("path=" << path << ", UNIMPLEMENTED");
+	return -ENOSYS;
 }
 
 /**
@@ -430,7 +481,9 @@ int g2f_access (const char *path, int mask)
   */
 int g2f_create (const char *path, mode_t mode, struct fuse_file_info *fi)
 {
-	return 0;
+	G2F_LOG_SCOPE();
+	G2F_LOG("path=" << path << ", UNIMPLEMENTED");
+	return -ENOSYS;
 }
 
 /**
@@ -447,7 +500,9 @@ int g2f_create (const char *path, mode_t mode, struct fuse_file_info *fi)
   */
 int g2f_ftruncate (const char *path, off_t lenfth, struct fuse_file_info *fi)
 {
-	return 0;
+	G2F_LOG_SCOPE();
+	G2F_LOG("path=" << path << ", UNIMPLEMENTED");
+	return -ENOSYS;
 }
 
 /**
@@ -464,6 +519,13 @@ int g2f_ftruncate (const char *path, off_t lenfth, struct fuse_file_info *fi)
   */
 int g2f_fgetattr (const char *path, struct stat *statbuf, struct fuse_file_info *fi)
 {
+	G2F_LOG_SCOPE();
+	G2F_LOG("path=" << path << ", fd=" << fi->fh);
+
+	IContentHandle *chn=FH_2_CONTENTHANDLEPTR(fi->fh);
+	chn->fillAttr(*statbuf);
+	G2F_LOG("Attribute filled");
+
 	return 0;
 }
 
@@ -502,7 +564,9 @@ int g2f_fgetattr (const char *path, struct stat *statbuf, struct fuse_file_info 
 int g2f_lock (const char *path, struct fuse_file_info *fi, int cmd,
 		  struct flock *lockInfo)
 {
-	return 0;
+	G2F_LOG_SCOPE();
+	G2F_LOG("path=" << path << ", UNIMPLEMENTED");
+	return -ENOSYS;
 }
 
 /**
@@ -518,7 +582,9 @@ int g2f_lock (const char *path, struct fuse_file_info *fi, int cmd,
   */
 int g2f_utimens (const char *path, const struct timespec tv[2])
 {
-	return 0;
+	G2F_LOG_SCOPE();
+	G2F_LOG("path=" << path << ", UNIMPLEMENTED");
+	return -ENOSYS;
 }
 
 /**
@@ -531,7 +597,9 @@ int g2f_utimens (const char *path, const struct timespec tv[2])
   */
 int g2f_bmap (const char *path, size_t blocksize, uint64_t *idx)
 {
-	return 0;
+	G2F_LOG_SCOPE();
+	G2F_LOG("path=" << path << ", UNIMPLEMENTED");
+	return -ENOSYS;
 }
 
 /**
@@ -546,10 +614,12 @@ int g2f_bmap (const char *path, size_t blocksize, uint64_t *idx)
   *
   * Introduced in version 2.8
   */
-int g2f_ioctl (const char *, int cmd, void *arg,
+int g2f_ioctl (const char *path, int cmd, void *arg,
 		  struct fuse_file_info *, unsigned int flags, void *data)
 {
-	return 0;
+	G2F_LOG_SCOPE();
+	G2F_LOG("path=" << path << ", UNIMPLEMENTED");
+	return -ENOSYS;
 }
 
 /**
@@ -572,7 +642,9 @@ int g2f_ioctl (const char *, int cmd, void *arg,
 int g2f_poll (const char *path, struct fuse_file_info *fi,
 		  struct fuse_pollhandle *ph, unsigned *reventsp)
 {
-	return 0;
+	G2F_LOG_SCOPE();
+	G2F_LOG("path=" << path << ", UNIMPLEMENTED");
+	return -ENOSYS;
 }
 
 /** Write contents of buffer to an open file
@@ -586,7 +658,9 @@ int g2f_poll (const char *path, struct fuse_file_info *fi,
 int g2f_write_buf (const char *path, struct fuse_bufvec *buf, off_t off,
 		  struct fuse_file_info *fi)
 {
-	return 0;
+	G2F_LOG_SCOPE();
+	G2F_LOG("path=" << path << ", UNIMPLEMENTED");
+	return -ENOSYS;
 }
 
 /** Store data from an open file in a buffer
@@ -608,7 +682,9 @@ int g2f_write_buf (const char *path, struct fuse_bufvec *buf, off_t off,
 int g2f_read_buf (const char *path, struct fuse_bufvec **bufp,
 		  size_t size, off_t off, struct fuse_file_info *fi)
 {
-	return 0;
+	G2F_LOG_SCOPE();
+	G2F_LOG("path=" << path << ", UNIMPLEMENTED");
+	return -ENOSYS;
 }
 /**
   * Perform BSD file locking operation
@@ -632,7 +708,9 @@ int g2f_read_buf (const char *path, struct fuse_bufvec **bufp,
   */
 int g2f_flock (const char *path, struct fuse_file_info *fi, int op)
 {
-	return 0;
+	G2F_LOG_SCOPE();
+	G2F_LOG("path=" << path << ", UNIMPLEMENTED");
+	return -ENOSYS;
 }
 
 /**
@@ -648,7 +726,9 @@ int g2f_flock (const char *path, struct fuse_file_info *fi, int op)
 int g2f_fallocate (const char *path, int mode, off_t offset, off_t len,
 		  struct fuse_file_info *fi)
 {
-	return 0;
+	G2F_LOG_SCOPE();
+	G2F_LOG("path=" << path << ", UNIMPLEMENTED");
+	return -ENOSYS;
 }
 
 
@@ -670,8 +750,6 @@ void g2f_init_ops(fuse_operations* ops)
 	ops->read = g2f_read;
 	ops->release = g2f_release;
 
-	// TODO Make stub implementation with log and return error code.
-	/*
 	ops->readlink = g2f_readlink;
 	ops->getdir = NULL;
 	ops->mknod = g2f_mknod;
@@ -694,14 +772,13 @@ void g2f_init_ops(fuse_operations* ops)
 	ops->access = g2f_access;
 	ops->ftruncate = g2f_ftruncate;
 	ops->fgetattr = g2f_fgetattr;
-	ops->lock = g2f_lock;
+	//ops->lock = g2f_lock;
 	ops->utimens = g2f_utimens;
 	ops->bmap = g2f_bmap;
 	ops->ioctl = g2f_ioctl;
 	ops->poll = g2f_poll;
-	ops->write_buf = g2f_write_buf;
-	ops->read_buf = g2f_read_buf;
+	//ops->write_buf = g2f_write_buf;
+	//ops->read_buf = g2f_read_buf;
 	ops->flock = g2f_flock;
 	ops->fallocate = g2f_fallocate;
-	*/
 }

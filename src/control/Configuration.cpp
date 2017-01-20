@@ -23,7 +23,8 @@ const AbstractStaticInitPropertiesList::PropDefi propsDefi[]=
 	"limit_upload_max",				IPropertyType::UINT,	0,			"0",				true,	"Max upload speed (kilobits/sec).",
 	"limit_download_max",			IPropertyType::UINT,	0,			"0",				true,	"Max download speed (kilobits/sec).",
 	"limit_upload_min",				IPropertyType::UINT,	0,			"0",				true,	"Min upload speed limit after that sync will be disabled (kilobits/sec).",
-	"control_dir",					IPropertyType::PATH,	0,			"/.control",		false,	"Control directory's mountpoint.",
+	"control_dir",					IPropertyType::PATH,	0,			"/.control",		false,	"Control directory's mountpoint."
+	// TODO Add property describes temporary files to exclude from exchange process
 };
 
 const AbstractStaticInitPropertiesList::EnumDefi enumDefi[]=

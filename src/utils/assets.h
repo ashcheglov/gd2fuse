@@ -12,6 +12,8 @@ MimePair splitMime(const std::string& fullMime);
 
 typedef std::array<int8_t,16> MD5Signature;
 
+#define G2F_CLEAN_STAT(statbuf) memset(&statbuf,0,sizeof(struct stat))
+
 
 /*
 // TODO Patch to boost path (instead of fromPathIt)

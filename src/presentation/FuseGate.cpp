@@ -6,6 +6,7 @@
 #include "error/appError.h"
 #include "utils/assets.h"
 #include "fs/RegularFileSystem.h"
+#include "fs/JoinedFileSystem.h"
 
 
 FuseGate::FuseGate(IProviderSession &ps)
@@ -35,9 +36,13 @@ int FuseGate::run(const FUSEOpts &fuseOpts)
 
 	const IDataProviderPtr &dp=_ps.createDataProvider();
 	const IFileSystemPtr &confFS=createConfigurationFS(_ps.getConfiguration());
-	_fs=createRegularFS(dp);
 	const auto &cd=_ps.getConfiguration()->getProperty("control_dir");
-	_fs->mount(*cd,confFS);
+
+	JoinedFileSystemFactory jfsf(S_IRWXU|S_IRGRP|S_IXGRP);
+	// TODO Make permissions configurable
+	jfsf.mount("/",createRegularFS(dp),S_IRWXU|S_IRGRP|S_IXGRP);
+	jfsf.mount(*cd,confFS,S_IRUSR|S_IXUSR|S_IRGRP|S_IXGRP);
+	_fs=jfsf.build();
 
 	return fuse_main(args.argc, args.argv, &g2f_oper, this);
 }

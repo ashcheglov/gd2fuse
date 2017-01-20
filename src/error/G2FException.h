@@ -10,6 +10,24 @@ typedef boost::error_info<struct tag_errno,std::string> g2f_error_detail_string;
 
 
 
+class G2FException : public virtual boost::exception, public virtual std::exception
+{
+public:
+	friend class G2FExceptionBuilder;
+
+	G2FException(const G2FError &errorCode);
+
+	const G2FError& code() const;
+	virtual const char* what() const noexcept;
+
+private:
+	void _buildWhat();
+	G2FError _error;
+	std::string _what;
+};
+
+
+
 class G2FExceptionBuilder
 {
 public:
@@ -28,6 +46,7 @@ public:
 	}
 
 	void throwIt(G2FError code);
+	G2FException getIt(G2FError code);
 
 
 private:
@@ -37,21 +56,6 @@ private:
 
 };
 
-class G2FException : public virtual boost::exception, public virtual std::exception
-{
-public:
-	friend class G2FExceptionBuilder;
-
-	G2FException(const G2FError &errorCode);
-
-	const G2FError& code();
-	virtual const char* what() const noexcept;
-
-private:
-	void _buildWhat();
-	G2FError _error;
-	std::string _what;
-};
 
 
 #define G2F_EXCEPTION(message)	G2FExceptionBuilder(message)

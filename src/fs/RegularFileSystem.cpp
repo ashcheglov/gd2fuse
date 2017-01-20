@@ -6,7 +6,7 @@
 #include <boost/ptr_container/ptr_list.hpp>
 #include "ContentManager.h"
 #include "IContentHandle.h"
-#include "AbstractMountFileSystem.h"
+#include "JoinedFileSystem.h"
 
 namespace
 {
@@ -17,7 +17,7 @@ namespace
 //  Tree Forward Decl
 //
 ///////////////////////////////////////
-class Tree : public AbstractMountFileSystem
+class Tree : public IFileSystem
 {
 public:
 	//
@@ -75,7 +75,13 @@ public:
 				return _n;
 			}
 
-			virtual int getError() override
+			virtual posix_error_code flush() override
+			{
+				_error=0;
+				return 0;
+			}
+
+			virtual posix_error_code getError() override
 			{
 				return _error;
 			}
@@ -98,7 +104,7 @@ public:
 				return 0;
 			}
 
-			virtual int close() override
+			virtual posix_error_code close() override
 			{
 				_error=0;
 				try
@@ -118,7 +124,7 @@ public:
 		private:
 			Node *_n=nullptr;
 			uint64_t _fd=-1;
-			int _error=0;
+			posix_error_code _error=0;
 
 			// IContentHandle interface
 		public:
@@ -196,6 +202,8 @@ public:
 			case TimeAttrib::ChangeTime:
 				p=&_lastChange;
 				break;
+			default:
+				break;
 			}
 			*p=value;
 		}
@@ -230,8 +238,9 @@ public:
 			{
 				if(!_dirFilled)
 					_tree->fillDir(this);
-
-				return std::make_shared<DirIt>(this->begin(),this->end());
+				IDirectoryIteratorPtr ret=std::make_shared<DirIt>(_next.begin(),_next.end());
+				clock_gettime(CLOCK_REALTIME,&_lastAccess);
+				return ret;
 			}
 			return IDirectoryIteratorPtr();
 		}
@@ -242,6 +251,7 @@ public:
 			try
 			{
 				fd=_tree->_cManager.openFile(_id,flags);
+				clock_gettime(CLOCK_REALTIME,&_lastAccess);
 			}
 			catch(G2FException &e)
 			{
@@ -252,6 +262,14 @@ public:
 				return new FileHandle(e.code().default_error_condition().value(),this);
 			}
 			return new FileHandle(this,fd);
+		}
+
+		virtual posix_error_code truncate(off_t newSize) override
+		{
+			if(this->isFolder())
+				return EISDIR;
+			//  TODO
+			return ENOSYS;
 		}
 
 		void setFileType(IMetaWrapper::FileType type)
@@ -439,9 +457,6 @@ public:
 
 		if(INode *in=_cache->findByPath(path))
 			return in;
-		if(INode *in=findInMounts(path))
-			return in;
-
 
 		fs::path::iterator it=path.begin();
 		Node *n=getRoot()->find(++it,path.end());
@@ -468,11 +483,6 @@ public:
 				return n;
 		}
 		return 0;
-	}
-
-	Node *find(fs::path::iterator &it, const fs::path::iterator &end)
-	{
-		return getRoot()->find(it,end);
 	}
 
 	//Node *remove(const fs::path &path);

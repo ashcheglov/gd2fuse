@@ -1,16 +1,16 @@
 #pragma once
 
 #include "IFileSystem.h"
+#include <tuple>
 
-class AbstractMountFileSystem : public IFileSystem
+class JoinedFileSystemFactory
 {
-
-
-	// IFileSystem interface
 public:
-	virtual bool mount(const boost::filesystem::path &mountPoint, IFileSystemPtr fs) override;
-	INode *findInMounts(const fs::path &path);
+	JoinedFileSystemFactory(int mode);
+	bool mount(const boost::filesystem::path &mountPoint, const IFileSystemPtr &fs, int mode);
+	IFileSystemPtr build() const;
 
 private:
-	std::vector<std::pair<fs::path,IFileSystemPtr>> _mounts;
+	int _mode=0;
+	std::vector<std::tuple<fs::path,int,IFileSystemPtr>> _mounts;
 };

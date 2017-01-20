@@ -14,7 +14,7 @@ namespace
 		if(!home)
 			home=getpwuid(getuid())->pw_dir;
 		if(!home)
-			throw G2F_EXCEPTION("Can't determine 'HOME' directory");
+			G2F_EXCEPTION("Can't determine 'HOME' directory").throwIt(G2FErrorCodes::UnknownEnvVariable);
 		return home;
 	}
 }
@@ -89,14 +89,14 @@ protected:
 				tag="RUNTIME";
 				const char* p=getenv("XDG_RUNTIME_HOME");
 				if(!p)
-					throw G2F_EXCEPTION("Can't read '%1' directory").arg("XDG_RUNTIME_HOME");
+					G2F_EXCEPTION("Can't read '%1' directory").arg("XDG_RUNTIME_HOME").throwIt(G2FErrorCodes::UnknownEnvVariable);
 				ret=p;
 			}
 			break;
 		}
 
 		if(!ret.is_absolute())
-			throw G2F_EXCEPTION("Path to '%1' directory '%2' must be absolute!").arg(tag).arg(ret);
+			G2F_EXCEPTION("Path to '%1' directory '%2' must be absolute!").arg(tag).arg(ret).throwIt(G2FErrorCodes::PathError);
 
 		return ret/G2F_APP_NAME;
 	}
