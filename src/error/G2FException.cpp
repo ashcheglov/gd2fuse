@@ -199,6 +199,11 @@ G2FExceptionBuilder &G2FExceptionBuilder::reason(const std::string &reason)
 	return *this;
 }
 
+void G2FExceptionBuilder::throwItSystem(int errNo)
+{
+	BOOST_THROW_EXCEPTION(getIt(G2FError(errNo,err::system_category())));
+}
+
 void G2FExceptionBuilder::throwIt(G2FError code)
 {
 	BOOST_THROW_EXCEPTION(getIt(code));

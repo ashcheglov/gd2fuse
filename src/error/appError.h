@@ -7,6 +7,7 @@
 
 enum G2FErrorCodes
 {
+	Success,
 	WrongAppArguments,
 	HttpReadError,
 	HttpTransportError,

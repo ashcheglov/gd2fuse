@@ -26,6 +26,8 @@ public:
 	{
 		switch (code)
 		{
+		case Success:
+			return G2FMESSAGE("Success");
 		case WrongAppArguments:
 			return G2FMESSAGE("Wrong application arguments");
 		case HttpReadError:
@@ -71,6 +73,12 @@ public:
 			int cond=condition.value();
 			switch (code)
 			{
+			case Success:
+				{
+					if(cond==err::errc::success)
+						return true;
+				}
+				break;
 			case PathError:
 				{
 					if(cond==err::errc::bad_address)
@@ -140,7 +148,7 @@ const err::error_category &appErrorCategory()
 }
 
 G2FError::G2FError()
-	: err::error_code(0,appErrorCategory())
+	: err::error_code(Success,appErrorCategory())
 {}
 
 G2FError::G2FError(int val, const boost::system::error_category &cat)
