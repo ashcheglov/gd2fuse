@@ -5,7 +5,7 @@
 
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/thread/thread.hpp>
-#include <boost/regex.hpp>	// Необходимо для включения библиотеки regex
+#include <boost/regex.hpp>
 
 #include <boost/log/common.hpp>
 #include <boost/log/sinks/text_ostream_backend.hpp>

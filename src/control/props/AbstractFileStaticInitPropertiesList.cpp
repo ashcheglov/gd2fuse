@@ -72,10 +72,9 @@ bool readConf(std::fstream &f,const std::string &name,std::string &val)
 	return false;
 }
 
-//
-//			Property
-//
-////////////////////////////////////
+/**
+ * @brief Provides reading/writig properties from/to conf-file.
+ */
 class FileFirstProperty : public IPropertyDefinition
 {
 public:
@@ -171,7 +170,7 @@ public:
 
 	virtual bool resetToDefault() override
 	{
-		// TODO @
+		// TODO Implement if need
 		return false;
 	}
 
