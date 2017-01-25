@@ -44,6 +44,8 @@ set(SRC_LIST	main.cpp
 
                 control/props/AbstractFileStaticInitPropertiesList.cpp
                 control/props/AbstractFileStaticInitPropertiesList.h
+                control/props/AbstractMemoryStaticInitPropertiesList.cpp
+                control/props/AbstractMemoryStaticInitPropertiesList.h
                 control/props/AbstractStaticInitPropertiesList.cpp
                 control/props/AbstractStaticInitPropertiesList.h
                 control/props/IEventHandler.h
