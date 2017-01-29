@@ -304,18 +304,38 @@ public:
 		return nullptr;
 	}
 
-	virtual INode *createNode(const boost::filesystem::path &path,bool isDirectory) override
+	virtual INode *createNode(const fs::path &path,bool isDirectory) override
+	{
+		fs::path rest;
+		const IFileSystemPtr &fs=getFS(path,rest);
+		if(fs)
+			return fs->createNode(rest,isDirectory);
+		return nullptr;
+	}
+
+	virtual RemoveStatus removeNode(const fs::path &p) override
+	{
+		fs::path rest;
+		const IFileSystemPtr &fs=getFS(p,rest);
+		if(fs)
+			return fs->removeNode(rest);
+		return RemoveStatus::NotFound;
+	}
+
+	IFileSystemPtr getFS(const fs::path &path,fs::path &fsPath)
 	{
 		fs::path::iterator it=path.begin();
 		JoinedNode *p=_mountedRoot->findMountPoint(++it,path.end());
 		if(p && it!=path.end())
 		{
 			fs::path rest("/");
-			rest/=fromPathIt(it,path.end());
-			return p->_fs->createNode(rest,isDirectory);
+			fsPath="/";
+			fsPath/=fromPathIt(it,path.end());
+			return p->_fs;
 		}
-		return nullptr;
+		return IFileSystemPtr();
 	}
+
 private:
 	JoinedNodeUPtr _mountedRoot;
 	//std::vector<std::pair<fs::path,IFileSystemPtr>> _mounts;

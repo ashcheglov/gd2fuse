@@ -26,5 +26,23 @@ Cache &Cache::insert(const fs::path &path, const std::string &id, INode *node)
 	boost::lock_guard<boost::shared_mutex> lock{_m};
 	_pathNodes[path]=node;
 	_idNodes[id]=node;
+	_nodes[node]=path;
 	return *this;
+}
+
+void Cache::slotNodeRemoved(INode &node)
+{
+	// clear the cache
+	auto itNode=_nodes.find(&node);
+	if(itNode!=_nodes.end())
+	{
+		auto pathIt=_pathNodes.find(itNode->second);
+		if(pathIt!=_pathNodes.end())
+			_pathNodes.erase(pathIt);
+
+		auto idIt=_idNodes.find(node.getId());
+		if(idIt!=_idNodes.end())
+			_idNodes.erase(idIt);
+		_nodes.erase(itNode);
+	}
 }

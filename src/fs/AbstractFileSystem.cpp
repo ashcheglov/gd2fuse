@@ -31,8 +31,13 @@ public:
 		return onContentChange.connect(sub);
 	}
 
+	virtual bs2::connection subscribeToNodeRemove(const OnNodeRemove::slot_type &sub) override
+	{
+		return onNodeRemove.connect(sub);
+	}
 
-	IFileSystem::INotify::OnContentChange onContentChange;
+	IFileSystem::INotify::OnContentChange	onContentChange;
+	IFileSystem::INotify::OnNodeRemove		onNodeRemove;
 
 private:
 	AbstractFileSystem *_parent=nullptr;
@@ -132,7 +137,7 @@ public:
 		_error=0;
 		_n->_tree->_cm->closeFile(_fd);
 		if(_changed)
-			_n->_tree->_notifier->onContentChange(_n);
+			_n->_tree->_notifier->onContentChange(*_n);
 	}
 private:
 	AbstractFileSystem::Node *_n=nullptr;
@@ -318,6 +323,29 @@ AbstractFileSystem::Node *AbstractFileSystem::Node::getParent()
 	return _parent;
 }
 
+void AbstractFileSystem::Node::removeNodes(Node *what)
+{
+	NodeList::iterator it=begin(),itEnd=end();
+	for(;it!=itEnd;++it)
+	{
+		if(what && &(*it)!=what)
+			continue;
+
+		it->removeNodes(nullptr);
+		_tree->cloudRemove(*it);
+		if(!it->isFolder())
+			_tree->_cm->deleteFile(it->getId());
+		_tree->_notifier->onNodeRemove(*it);
+
+		if(what)
+			break;
+	}
+	if(what)
+		_next.erase(it);
+	else
+		_next.clear();
+}
+
 AbstractFileSystem::Node *AbstractFileSystem::Node::find(fs::path::iterator &it,const fs::path::iterator &end)
 {
 	AbstractFileSystem::Node *ret=this;
@@ -371,6 +399,7 @@ AbstractFileSystem::AbstractFileSystem(const ContentManagerPtr &cm)
 	_notifier.reset(new Notifier(this));
 	//_notifier->subscribeToContentChange(IFileSystem::INotify::OnContentChange::slot_type(&AbstractFileSystem::updateNodeContent,this));
 	_notifier->subscribeToContentChange(boost::bind(&AbstractFileSystem::updateNodeContent,this,_1));
+	_notifier->subscribeToNodeRemove(boost::bind(&Cache::slotNodeRemoved,_cache.get(),_1));
 	//_cManager.init(_provider->getParent()->getConfiguration()->getPaths()->getDir(IPathManager::DATA));
 }
 
@@ -457,7 +486,7 @@ INode *AbstractFileSystem::get(const fs::path &path)
 INode *AbstractFileSystem::createNode(const fs::path &path,bool isDirectory)
 {
 	fs::path::iterator it=path.begin(),itEnd=path.end();
-	AbstractFileSystem::Node *n=getRoot()->find(++it,itEnd);
+	Node *n=getRoot()->find(++it,itEnd);
 	size_t entries=std::distance(it,itEnd);
 	while(entries>1)
 	{
@@ -480,11 +509,25 @@ INode *AbstractFileSystem::createNode(const fs::path &path,bool isDirectory)
 	return nn.release();
 }
 
-void AbstractFileSystem::updateNodeContent(INode *n)
+IFileSystem::RemoveStatus AbstractFileSystem::removeNode(const fs::path &path)
 {
+	INode *n=get(path);
+	if(!n)
+		return IFileSystem::NotFound;
 	Node *node=dynamic_cast<Node*>(n);
 	assert(node);
-	const ContentManager::IReaderPtr &reader=_cm->readContent(n->getId());
+	Node *parent=node->getParent();
+	if(!parent)
+		return IFileSystem::Forbidden;
+	parent->removeNodes(node);
+	return IFileSystem::Success;
+}
+
+void AbstractFileSystem::updateNodeContent(INode &n)
+{
+	Node *node=dynamic_cast<Node*>(&n);
+	assert(node);
+	const ContentManager::IReaderPtr &reader=_cm->readContent(n.getId());
 	cloudUpdate(*node,nullptr,"",reader.get());
 	cloudFetchMeta(*node);
 }

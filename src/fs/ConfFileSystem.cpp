@@ -162,6 +162,7 @@ public:
 	}
 	virtual void fillAttr(struct stat &statbuf) override
 	{
+		memset(&statbuf,0,sizeof(statbuf));
 		G2F_CLEAN_STAT(statbuf);
 		//statbuf.st_size=10;
 		statbuf.st_mode=S_IFREG|S_IRUSR|S_IRGRP;
@@ -353,9 +354,14 @@ public:
 		return _root->get(p.filename());
 	}
 
-	virtual INode *createNode(const boost::filesystem::path &p,bool isDirectory) override
+	virtual INode *createNode(const fs::path &p,bool isDirectory) override
 	{
 		return nullptr;
+	}
+
+	virtual RemoveStatus removeNode(const fs::path &p) override
+	{
+		return RemoveStatus::Forbidden;
 	}
 
 private:

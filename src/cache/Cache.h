@@ -16,12 +16,15 @@ public:
 	bool remove(const INode *node);
 	Cache &insert(const fs::path& path, const std::string &id, INode *node);
 
+	void slotNodeRemoved(INode &node);
+
 private:
 	boost::shared_mutex _m;
 	typedef boost::unordered_map<fs::path,INode*> PathNodes;
 	typedef boost::unordered_map<std::string,INode*> IdNodes;
-	//typedef boost::unordered_map<Node*,std::string> Nodes;
+	typedef boost::unordered_map<INode*,fs::path> Nodes;
 	PathNodes _pathNodes;
 	IdNodes _idNodes;
+	Nodes _nodes;
 };
 

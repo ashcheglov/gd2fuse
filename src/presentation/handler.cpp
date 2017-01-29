@@ -355,6 +355,25 @@ int g2f_write (const char *path, const char *buf, size_t size, off_t offset,
 /** Remove a file */
 int g2f_unlink (const char *path)
 {
+	G2F_LOG_SCOPE();
+	G2F_LOG("path=" << path);
+	INode *f=G2F_DATA->getINode(path);
+	if(!f)
+		return -ENOENT;
+	if(f->isFolder())
+		return -EISDIR;
+	posix_error_code ret=G2F_DATA->removeINode(path);
+	return -ret;
+}
+
+/** Create a directory
+  *
+  * Note that the mode argument may not have the type specification
+  * bits set, i.e. S_ISDIR(mode) can be false.  To obtain the
+  * correct directory type bits use  mode|S_IFDIR
+  * */
+int g2f_mkdir(const char *path, mode_t mode)
+{
 	// TODO
 	G2F_LOG_SCOPE();
 	G2F_LOG("path=" << path << ", UNIMPLEMENTED");
@@ -384,19 +403,6 @@ int g2f_readlink (const char *path, char *link, size_t size)
   * regular files that will be called instead.
   */
 int g2f_mknod(const char *path, mode_t mode, dev_t dev)
-{
-	G2F_LOG_SCOPE();
-	G2F_LOG("path=" << path << ", UNIMPLEMENTED");
-	return -ENOSYS;
-}
-
-/** Create a directory
-  *
-  * Note that the mode argument may not have the type specification
-  * bits set, i.e. S_ISDIR(mode) can be false.  To obtain the
-  * correct directory type bits use  mode|S_IFDIR
-  * */
-int g2f_mkdir(const char *path, mode_t mode)
 {
 	G2F_LOG_SCOPE();
 	G2F_LOG("path=" << path << ", UNIMPLEMENTED");
@@ -800,11 +806,11 @@ void g2f_init_ops(fuse_operations* ops)
 	ops->access = g2f_access;
 	ops->write = g2f_write;
 	ops->unlink = g2f_unlink;
+	ops->mkdir = g2f_mkdir;
 
 	ops->readlink = g2f_readlink;
 	//ops->getdir = NULL;
 	ops->mknod = g2f_mknod;
-	ops->mkdir = g2f_mkdir;
 	ops->rmdir = g2f_rmdir;
 	ops->symlink = g2f_symlink;
 	ops->rename = g2f_rename;

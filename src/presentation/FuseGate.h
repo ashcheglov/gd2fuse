@@ -18,6 +18,7 @@ public:
 	INode *getINode(const char *path);
 	INode *createFile(const char *fileName, int flags);
 	IFileSystem& getFS();
+	posix_error_code removeINode(const char *path);
 
 	static int fuseHelp();
 

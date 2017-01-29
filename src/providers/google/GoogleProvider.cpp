@@ -445,6 +445,18 @@ protected:
 			G2FExceptionBuilder("GoogleFS: Fail to update data").throwIt(e);
 	}
 
+	virtual void cloudRemove(Node &node) override
+	{
+		// TODO Implement remove to trash
+		uptr<g_drv::FilesResource_DeleteMethod> m(_service->get_files().NewDeleteMethod(
+													  _authCred.get(),
+													  node.getId()));
+		m->Execute();
+		const G2FError &e=checkHttpResponse(m->mutable_http_request());
+		if(e.isError())
+			G2FExceptionBuilder("GoogleFS: Fail to remove node id '%1'").arg(node.getId()).throwIt(e);
+	}
+
 private:
 	sptr<g_drv::DriveService> _service;
 	OAuth2CredentialPtr _authCred;

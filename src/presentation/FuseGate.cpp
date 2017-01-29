@@ -61,6 +61,17 @@ IFileSystem &FuseGate::getFS()
 	return *_fs;
 }
 
+posix_error_code FuseGate::removeINode(const char *path)
+{
+	IFileSystem::RemoveStatus ret=_fs->removeNode(path);
+	if(ret==IFileSystem::RemoveStatus::Success)
+		return 0;
+	if(ret==IFileSystem::RemoveStatus::NotFound)
+		return ENOENT;
+	//if(ret==IFileSystem::RemoveStatus::Forbidden)
+	return EPERM;
+}
+
 int FuseGate::fuseHelp()
 {
 	fuse_args args=FUSE_ARGS_INIT(0,NULL);

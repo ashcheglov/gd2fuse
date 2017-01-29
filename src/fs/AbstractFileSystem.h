@@ -54,6 +54,9 @@ public:
 		void setFileType(FileType type);
 		Node *getParent();
 
+		// Remove all (what==null) or particular (what!=null) inferrior nodes
+		void removeNodes(Node *what=nullptr);
+
 		size_t size() const;
 		Node *find(fs::path::iterator &it,const fs::path::iterator &end);
 		void clearTime(TimeAttrib what);
@@ -109,6 +112,7 @@ public:
 	virtual Node *getRoot() override;
 	virtual INode *get(const fs::path &path) override;
 	virtual INode *createNode(const fs::path &path,bool isDirectory) override;
+	virtual RemoveStatus removeNode(const fs::path &path) override;
 
 protected:
 	virtual void cloudFetchMeta(Node &dest) =0;
@@ -116,8 +120,9 @@ protected:
 	virtual void cloudCreateMeta(Node &dest) =0;
 	virtual ContentManager::IReaderUPtr cloudReadMedia(Node &node) =0;
 	virtual void cloudUpdate(Node &node,INodePatch* patchMeta,const std::string &mediaType,ContentManager::IReader *content) =0;
+	virtual void cloudRemove(Node &node) =0;
 
-	void updateNodeContent(INode *n);
+	void updateNodeContent(INode &n);
 	//Node *remove(const fs::path &path);
 	//void move(const fs::path &from,const fs::path &to);
 

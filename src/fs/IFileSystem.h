@@ -10,13 +10,21 @@ class IFileSystem
 {
 
 public:
+	enum RemoveStatus
+	{
+		Success,
+		NotFound,
+		Forbidden
+	};
 
 	class INotify
 	{
 	public:
-		typedef boost::signals2::signal<void (INode*)> OnContentChange;
+		typedef boost::signals2::signal<void (INode&)> OnContentChange;
+		typedef boost::signals2::signal<void (INode&)> OnNodeRemove;
 
 		virtual bs2::connection subscribeToContentChange(const OnContentChange::slot_type &sub) =0;
+		virtual bs2::connection subscribeToNodeRemove(const OnNodeRemove::slot_type &sub) =0;
 
 		virtual ~INotify(){}
 	};
@@ -25,6 +33,7 @@ public:
 	virtual INode* getRoot() =0;
 	virtual INode* get(const fs::path &p) =0;
 	virtual INode* createNode(const fs::path &p,bool isDirectory) =0;
+	virtual RemoveStatus removeNode(const fs::path &p) =0;
 
 	virtual ~IFileSystem() {}
 };
