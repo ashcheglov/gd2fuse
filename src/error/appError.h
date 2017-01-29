@@ -52,6 +52,7 @@ public:
 	G2FError(int val,const err::error_category &cat=appErrorCategory());
 	G2FError &setDetail(const std::string &detail);
 	const std::string& getDetail();
+	bool isError() const;
 
 	template <class ErrorCodeEnum>
 	G2FError(ErrorCodeEnum e) BOOST_SYSTEM_NOEXCEPT

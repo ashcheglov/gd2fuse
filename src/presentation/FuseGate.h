@@ -16,6 +16,7 @@ public:
 	int run(const FUSEOpts &fuseOpts);
 
 	INode *getINode(const char *path);
+	INode *createFile(const char *fileName, int flags);
 	IFileSystem& getFS();
 
 	static int fuseHelp();

@@ -110,21 +110,39 @@ public:
 		}
 		virtual posix_error_code getError() override
 		{
-			return 0;
+			return _error;
 		}
 		virtual int read(char *buf, size_t len, off_t offset) override
 		{
+			_error=0;
 			return boost::numeric_cast<int>(_s.copy(buf,len,offset));
 		}
-		virtual posix_error_code close() override
+		int write(const char *buf, size_t size, off_t offset) override
 		{
-			return 0;
+			_error=0;
+			if(offset!=0)
+			{
+				_error=EINVAL;
+				return -1;
+			}
+
+			std::string newVal(buf,size);
+			if(_p->setValue(newVal).isError())
+			{
+				_error=EINVAL;
+				return -1;
+			}
+			return size;
+		}
+		virtual void close() override
+		{
 		}
 	private:
+		posix_error_code _error=0;
+
 		INode *_parent=nullptr;
 		IPropertyDefinitionPtr _p;
 		std::string _s;
-
 
 	};
 
@@ -317,6 +335,12 @@ public:
 
 	// IFileSystem interface
 public:
+	virtual INotify *getNotifier() override
+	{
+		// TODO
+		return nullptr;
+	}
+
 	virtual INode *getRoot() override
 	{
 		return _root.get();
@@ -327,6 +351,11 @@ public:
 		if(p=="/")
 			return getRoot();
 		return _root->get(p.filename());
+	}
+
+	virtual INode *createNode(const boost::filesystem::path &p,bool isDirectory) override
+	{
+		return nullptr;
 	}
 
 private:

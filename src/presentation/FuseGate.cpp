@@ -5,7 +5,7 @@
 #include "error/G2FException.h"
 #include "error/appError.h"
 #include "utils/assets.h"
-#include "fs/RegularFileSystem.h"
+#include "fs/ConfFileSystem.h"
 #include "fs/JoinedFileSystem.h"
 
 
@@ -34,13 +34,12 @@ int FuseGate::run(const FUSEOpts &fuseOpts)
 	fuse_operations g2f_oper;
 	g2f_init_ops(&g2f_oper);
 
-	const IDataProviderPtr &dp=_ps.createDataProvider();
 	const IFileSystemPtr &confFS=createConfigurationFS(_ps.getConfiguration());
 	const auto &cd=_ps.getConfiguration()->getProperty("control_dir");
 
 	JoinedFileSystemFactory jfsf(S_IRWXU|S_IRGRP|S_IXGRP);
 	// TODO Make permissions configurable
-	jfsf.mount("/",createRegularFS(dp),S_IRWXU|S_IRGRP|S_IXGRP);
+	jfsf.mount("/",_ps.getFileSystem(),S_IRWXU|S_IRGRP|S_IXGRP);
 	jfsf.mount(*cd,confFS,S_IRUSR|S_IXUSR|S_IRGRP|S_IXGRP);
 	_fs=jfsf.build();
 
@@ -50,6 +49,11 @@ int FuseGate::run(const FUSEOpts &fuseOpts)
 INode *FuseGate::getINode(const char *path)
 {
 	return _fs->get(path);
+}
+
+INode *FuseGate::createFile(const char *fileName, int flags)
+{
+	return _fs->createNode(fileName,false);
 }
 
 IFileSystem &FuseGate::getFS()

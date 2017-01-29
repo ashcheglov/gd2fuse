@@ -16,7 +16,8 @@ public:
 	virtual posix_error_code flush() =0;
 	virtual posix_error_code getError() =0;
 	virtual int read(char *buf, size_t len, off_t offset) =0;
-	virtual posix_error_code close() =0;
+	virtual int write(const char *buf, size_t len, off_t offset) =0;
+	virtual void close() =0;
 	virtual ~IContentHandle() {}
 };
 

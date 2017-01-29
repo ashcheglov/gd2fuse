@@ -38,7 +38,7 @@ int g2f_getattr(const char *path, struct stat * statbuf)
 	}
 	G2F_LOG("node id=" << n->getId() << ", name=" << n->getName());
 	n->fillAttr(*statbuf);
-	G2F_LOG("Attribute filled");
+	G2F_LOG("statbuf: st_size=" << statbuf->st_size << ", st_mode=" << statbuf->st_mode);
 	return 0;
 }
 
@@ -209,11 +209,158 @@ int g2f_release (const char *path, struct fuse_file_info *fi)
 	G2F_LOG_SCOPE();
 	G2F_LOG("path=" << path << ", fd=" << fi->fh);
 	IContentHandle *chn=FH_2_CONTENTHANDLEPTR(fi->fh);
-	int err=chn->close();
+	chn->close();
 	delete chn;
-	G2F_LOG("errno=" << err);
+	G2F_LOG("errno=" << 0);
+	return 0;
+}
+
+/**
+  * Get attributes from an open file
+  *
+  * This method is called instead of the getattr() method if the
+  * file information is available.
+  *
+  * Currently this is only called after the create() method if that
+  * is implemented (see above).  Later it may be called for
+  * invocations of fstat() too.
+  *
+  * Introduced in version 2.5
+  */
+int g2f_fgetattr (const char *path, struct stat *statbuf, struct fuse_file_info *fi)
+{
+	G2F_LOG_SCOPE();
+	G2F_LOG("path=" << path << ", fd=" << fi->fh);
+
+	IContentHandle *chn=FH_2_CONTENTHANDLEPTR(fi->fh);
+	chn->fillAttr(*statbuf);
+	G2F_LOG("Attribute filled");
+
+	return 0;
+}
+
+/** Change the size of a file */
+int g2f_truncate (const char *path, off_t newSize)
+{
+	// TODO
+	G2F_LOG_SCOPE();
+	G2F_LOG("path=" << path << ", newSize=" << newSize);
+
+	INode *n=G2F_DATA->getINode(path);
+	if(!n)
+		return -ENOENT;
+	if(n->isFolder())
+		return -EISDIR;
+	//EPERM
+	int ret=n->truncate(newSize);
+	G2F_LOG("ret=" << ret);
+	return -ret;
+}
+
+/**
+  * Create and open a file
+  *
+  * If the file does not exist, first create it with the specified
+  * mode, and then open it.
+  *
+  * If this method is not implemented or under Linux kernel
+  * versions earlier than 2.6.15, the mknod() and open() methods
+  * will be called instead.
+  *
+  * Introduced in version 2.5
+  *
+  * creat() is equivalent to open() with flags equal to O_CREAT|O_WRONLY|O_TRUNC.
+  */
+int g2f_create (const char *path, mode_t mode, struct fuse_file_info *fi)
+{
+	G2F_LOG_SCOPE();
+	G2F_LOG("path=" << path << ", flags=" << fi->flags);
+
+	// NOTE Implement transactions
+
+	//INode *f=G2F_DATA->createFile(p,fi->flags);
+	INode *f=G2F_DATA->getINode(path);
+	if(f)
+	{
+		if(f->isFolder())
+			return -EISDIR;
+	}
+	else
+	{
+		fs::path p(path);
+		INode *n=G2F_DATA->getINode(p.parent_path().c_str());
+		if(!n->isFolder())
+			return -ENOTDIR;
+		f=G2F_DATA->createFile(path,fi->flags);
+	}
+	IContentHandle *chn=f->openContent(fi->flags);
+
+	G2F_LOG("node id=" << f->getId() << ", name=" << f->getName());
+
+	fi->nonseekable=0;
+	fi->direct_io=chn->useDirectIO()?1:0;
+	assert(chn!=0);
+	int err=chn->getError();
+	if(err)
+		delete chn;
+	else
+		fi->fh=CONTENTHANDLEPTR_2_FH(chn);
+
+	G2F_LOG("errno=" << err << ", fd=" << fi->fh);
+
 	return -err;
 }
+
+/**
+  * Check file access permissions
+  *
+  * This will be called for the access() system call.  If the
+  * 'default_permissions' mount option is given, this method is not
+  * called.
+  *
+  * This method is not called under Linux kernel versions 2.4.x
+  *
+  * Introduced in version 2.5
+  */
+int g2f_access (const char *path, int mask)
+{
+	G2F_LOG_SCOPE();
+	G2F_LOG("path=" << path << ", mask=" << mask);
+	INode *f=G2F_DATA->getINode(path);
+	if(!f)
+		return -ENOENT;
+	G2F_LOG("errno=0");
+	return 0;
+}
+
+/** Write data to an open file
+  *
+  * Write should return exactly the number of bytes requested
+  * except on error.	 An exception to this is when the 'direct_io'
+  * mount option is specified (see read operation).
+  *
+  * Changed in version 2.2
+  */
+int g2f_write (const char *path, const char *buf, size_t size, off_t offset,
+			   struct fuse_file_info *fi)
+{
+	G2F_LOG_SCOPE();
+	G2F_LOG("path=" << path << ", fd=" << fi->fh << ", bufsize=" << size << ", offset=" << offset);
+	IContentHandle *chn=FH_2_CONTENTHANDLEPTR(fi->fh);
+	int ret=chn->write(buf,size,offset);
+	G2F_LOG("ret=" << ret);
+	return ret;
+}
+
+/** Remove a file */
+int g2f_unlink (const char *path)
+{
+	// TODO
+	G2F_LOG_SCOPE();
+	G2F_LOG("path=" << path << ", UNIMPLEMENTED");
+	return -ENOSYS;
+}
+
 
 /** Read the target of a symbolic link
   *
@@ -250,14 +397,6 @@ int g2f_mknod(const char *path, mode_t mode, dev_t dev)
   * correct directory type bits use  mode|S_IFDIR
   * */
 int g2f_mkdir(const char *path, mode_t mode)
-{
-	G2F_LOG_SCOPE();
-	G2F_LOG("path=" << path << ", UNIMPLEMENTED");
-	return -ENOSYS;
-}
-
-/** Remove a file */
-int g2f_unlink (const char *path)
 {
 	G2F_LOG_SCOPE();
 	G2F_LOG("path=" << path << ", UNIMPLEMENTED");
@@ -306,40 +445,6 @@ int g2f_chmod (const char *path, mode_t mode)
 
 /** Change the owner and group of a file */
 int g2f_chown (const char *path, uid_t uid, gid_t gid)
-{
-	G2F_LOG_SCOPE();
-	G2F_LOG("path=" << path << ", UNIMPLEMENTED");
-	return -ENOSYS;
-}
-
-/** Change the size of a file */
-int g2f_truncate (const char *path, off_t newSize)
-{
-	// TODO
-	G2F_LOG_SCOPE();
-	G2F_LOG("path=" << path << ", newSize=" << newSize);
-
-	INode *n=G2F_DATA->getINode(path);
-	if(!n)
-		return -ENOENT;
-	if(n->isFolder())
-		return -EISDIR;
-	//EPERM
-	int ret=n->truncate(newSize);
-	G2F_LOG("ret=" << ret);
-	return -ret;
-}
-
-/** Write data to an open file
-  *
-  * Write should return exactly the number of bytes requested
-  * except on error.	 An exception to this is when the 'direct_io'
-  * mount option is specified (see read operation).
-  *
-  * Changed in version 2.2
-  */
-int g2f_write (const char *path, const char *buf, size_t size, off_t offset,
-			   struct fuse_file_info *fi)
 {
 	G2F_LOG_SCOPE();
 	G2F_LOG("path=" << path << ", UNIMPLEMENTED");
@@ -449,42 +554,6 @@ void g2f_destroy (void *userData)
 {
 }
 
-/**
-  * Check file access permissions
-  *
-  * This will be called for the access() system call.  If the
-  * 'default_permissions' mount option is given, this method is not
-  * called.
-  *
-  * This method is not called under Linux kernel versions 2.4.x
-  *
-  * Introduced in version 2.5
-  */
-int g2f_access (const char *path, int mask)
-{
-	G2F_LOG_SCOPE();
-	G2F_LOG("path=" << path << ", UNIMPLEMENTED");
-	return -ENOSYS;
-}
-
-/**
-  * Create and open a file
-  *
-  * If the file does not exist, first create it with the specified
-  * mode, and then open it.
-  *
-  * If this method is not implemented or under Linux kernel
-  * versions earlier than 2.6.15, the mknod() and open() methods
-  * will be called instead.
-  *
-  * Introduced in version 2.5
-  */
-int g2f_create (const char *path, mode_t mode, struct fuse_file_info *fi)
-{
-	G2F_LOG_SCOPE();
-	G2F_LOG("path=" << path << ", UNIMPLEMENTED");
-	return -ENOSYS;
-}
 
 /**
   * Change the size of an open file
@@ -503,30 +572,6 @@ int g2f_ftruncate (const char *path, off_t lenfth, struct fuse_file_info *fi)
 	G2F_LOG_SCOPE();
 	G2F_LOG("path=" << path << ", UNIMPLEMENTED");
 	return -ENOSYS;
-}
-
-/**
-  * Get attributes from an open file
-  *
-  * This method is called instead of the getattr() method if the
-  * file information is available.
-  *
-  * Currently this is only called after the create() method if that
-  * is implemented (see above).  Later it may be called for
-  * invocations of fstat() too.
-  *
-  * Introduced in version 2.5
-  */
-int g2f_fgetattr (const char *path, struct stat *statbuf, struct fuse_file_info *fi)
-{
-	G2F_LOG_SCOPE();
-	G2F_LOG("path=" << path << ", fd=" << fi->fh);
-
-	IContentHandle *chn=FH_2_CONTENTHANDLEPTR(fi->fh);
-	chn->fillAttr(*statbuf);
-	G2F_LOG("Attribute filled");
-
-	return 0;
 }
 
 /**
@@ -749,29 +794,30 @@ void g2f_init_ops(fuse_operations* ops)
 	ops->open = g2f_open;
 	ops->read = g2f_read;
 	ops->release = g2f_release;
+	ops->fgetattr = g2f_fgetattr;
+	ops->truncate = g2f_truncate;
+	ops->create = g2f_create;
+	ops->access = g2f_access;
+	ops->write = g2f_write;
+	ops->unlink = g2f_unlink;
 
 	ops->readlink = g2f_readlink;
-	ops->getdir = NULL;
+	//ops->getdir = NULL;
 	ops->mknod = g2f_mknod;
 	ops->mkdir = g2f_mkdir;
-	ops->unlink = g2f_unlink;
 	ops->rmdir = g2f_rmdir;
 	ops->symlink = g2f_symlink;
 	ops->rename = g2f_rename;
 	ops->link = g2f_link;
 	ops->chmod = g2f_chmod;
 	ops->chown = g2f_chown;
-	ops->truncate = g2f_truncate;
-	ops->write = g2f_write;
 	ops->statfs = g2f_statfs;
 	ops->flush = g2f_flush;
 	ops->fsync = g2f_fsync;
 	ops->fsyncdir = g2f_fsyncdir;
 	ops->init = g2f_init;
 	ops->destroy = g2f_destroy;
-	ops->access = g2f_access;
 	ops->ftruncate = g2f_ftruncate;
-	ops->fgetattr = g2f_fgetattr;
 	//ops->lock = g2f_lock;
 	ops->utimens = g2f_utimens;
 	ops->bmap = g2f_bmap;

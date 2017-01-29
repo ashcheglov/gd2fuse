@@ -2,7 +2,7 @@
 
 #include "utils/decls.h"
 #include "IOAuth2Process.h"
-#include "IDataProvider.h"
+#include "fs/IFileSystem.h"
 #include "control/IConfiguration.h"
 
 class IProvider;
@@ -12,7 +12,7 @@ class IProviderSession
 
 public:
 
-	virtual IDataProviderPtr createDataProvider() =0;
+	virtual IFileSystemPtr getFileSystem() =0;
 	virtual IOAuth2ProcessPtr createOAuth2Process() =0;
 	virtual IProvider *getProvider() =0;
 	virtual bool isAuthorized() =0;

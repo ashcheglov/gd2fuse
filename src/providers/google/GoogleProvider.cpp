@@ -7,6 +7,7 @@
 #include "control/props/AbstractFileStaticInitPropertiesList.h"
 #include "control/ChainedCofiguration.h"
 #include "control/paths/PathManager.h"
+#include "fs/AbstractFileSystem.h"
 
 #include "providers/google/Auth.h"
 #include <googleapis/client/util/status.h>
@@ -16,10 +17,12 @@
 #include <googleapis/client/data/data_reader.h>
 #include <googleapis/client/transport/http_response.h>
 #include <googleapis/client/util/date_time.h>
+#include <googleapis/client/util/status.h>
 #include <googleapis/strings/stringpiece.h>
 #include <googleapis/client/transport/http_transport.h>
 #include <google/drive_api/drive_service.h>
 #include <googleapis/client/transport/http_authorization.h>
+#include "googleapis/base/integral_types.h"
 
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/hex.hpp>
@@ -38,8 +41,9 @@ namespace google
 
 #define G2F_GDRIVE_CONF_FILENAME	"gdrive.conf"
 
+const fs::path ROOT_PATH("/");
 const std::string ID_ROOT("root");
-const std::string FILE_RESOURCE_FIELD("etag,title,mimeType,createdDate,modifiedDate,lastViewedByMeDate,originalFilename,fileSize,md5Checksum");
+const std::string FILE_RESOURCE_FIELD("id,etag,title,mimeType,createdDate,modifiedDate,lastViewedByMeDate,originalFilename,fileSize,md5Checksum");
 MimePair FOLDER_MIME("application","vnd.google-apps.folder");
 MimePair GOOGLE_DOC("application","vnd.google-apps.document");
 MimePair SHORTCUT("application","vnd.google-apps.drive-sdk");
@@ -59,15 +63,23 @@ void sp2md5sign(const g_api::StringPiece &str, MD5Signature &ret)
 	boost::algorithm::unhex(str.begin(),str.end(),ret.begin());
 }
 
-IMetaWrapper::FileType getFileType(const MimePair &mp)
+INode::FileType getFileType(const MimePair &mp)
 {
 	if(mp==FOLDER_MIME)
-		return IMetaWrapper::FileType::Directory;
+		return INode::FileType::Directory;
 	if(mp==GOOGLE_DOC)
-		return IMetaWrapper::FileType::Exported;
+		return INode::FileType::Exported;
 	if(mp==SHORTCUT)
-		return IMetaWrapper::FileType::Shortcut;
-	return IMetaWrapper::FileType::Binary;
+		return INode::FileType::Shortcut;
+	return INode::FileType::Binary;
+}
+
+std::string getMimeType(const MimePair &mp)
+{
+	std::string ret(mp.first);
+	ret+='/';
+	ret+=mp.second;
+	return ret;
 }
 
 G2FError checkHttpResponse(const g_cli::HttpRequest* request)
@@ -171,14 +183,14 @@ protected:
 //   Data Reader
 //
 /////////////////////////////////////////
-class DataReader : public IDataReader
+class ContentReader : public ContentManager::IReader
 {
 public:
-	DataReader(uptr<g_drv::FilesResource_GetMethod> method)
+	ContentReader(uptr<g_drv::FilesResource_GetMethod> method)
 		: _method(std::move(method))
 	{}
 
-// IDataReader interface
+// IReader interface
 	virtual bool done() override
 	{
 		return reader()->done();
@@ -210,7 +222,7 @@ private:
 			_method->Execute();
 			const G2FError &e=checkHttpResponse(_method->mutable_http_request());
 			if(e)
-				G2FExceptionBuilder().throwIt(e);
+				G2FExceptionBuilder("Fail to read data from Google Drive").throwIt(e);
 			g_cli::HttpResponse *resp=_method->mutable_http_request()->response();
 			_reader=resp->body_reader();
 		}
@@ -222,65 +234,118 @@ private:
 
 
 
-//
-//   Data Provider
-//
-/////////////////////////////////////////
-class GoogleDataProvider : public IDataProvider
+
+
+
+
+
+/**
+ * @brief Implements Google File System
+ *
+ **************************************************/
+class GoogleFileSystem : public AbstractFileSystem
 {
 public:
-
-	GoogleDataProvider(IProviderSession *parent,sptr<g_drv::DriveService> service, const OAuth2CredentialPtr &authCred)
-		: _parent(parent),
+	GoogleFileSystem(const ContentManagerPtr &cm,
+					 sptr<g_drv::DriveService> service,
+					 OAuth2CredentialPtr authCred)
+		: AbstractFileSystem(cm),
 		  _service(service),
 		  _authCred(authCred)
 	{}
 
-#define G2F_STRPAIR(str) str,str+sizeof(str)/sizeof(char)-1
-
-	// IDataProvider interface
-	virtual IDataReaderPtr createContentReader(const std::string &id, IConvertFormatPtr targetFormat) override
-	{
-		// TODO Make multithread download
-		uptr<g_drv::FilesResource_GetMethod> lm(_service->get_files().NewGetMethod(_authCred.get(),id));
-		lm->set_alt("media");
-		return std::make_shared<DataReader>(std::move(lm));
-	}
-
-	class IdList : public IIdList
+	class GoogleReader : public g_cli::DataReader
 	{
 	public:
-		typedef std::vector<std::string> List;
-		List vals;
-		List::const_iterator it;
+		GoogleReader(ContentManager::IReader *content)
+			: DataReader(nullptr),
+			  _content(content)
+		{}
 
-		void charge()
+		// DataReader interface
+	protected:
+		// FIX Conflict between int64 definition (int64 = long vs long long)
+		virtual long long DoReadToBuffer(long long max_bytes, char* storage) override
 		{
-			it=vals.begin();
+			long long ret=_content->read(storage,max_bytes);
+
+			if(ret!=max_bytes)
+			{
+				if(_content->done())
+					set_done(true);
+
+				G2FError e=_content->error();
+				if(e!=err::errc::success)
+				{
+					if(e.category()==err::generic_category())
+						set_status(g_cli::StatusFromErrno(e.value(),e.message()));
+					else
+						set_status(g_cli::StatusUnknown(e.message()));
+				}
+			}
+			return ret;
 		}
 
-		// IIdList interface
-		virtual bool hasNext() override
-		{
-			return it<vals.end();
-		}
-		virtual std::string next() override
-		{
-			return *(it++);
-		}
+		ContentManager::IReader *_content;
 	};
-	G2F_DECLARE_PTR(IdList);
 
-	virtual IIdListPtr fetchList(const std::string &id) override
+	// AbstractFileSystem interface
+protected:
+	virtual void cloudFetchMeta(Node &dest) override
 	{
-		IdListPtr ret=std::make_shared<IdList>();
-		uptr<g_drv::ChildrenResource_ListMethod> lm(_service->get_children().NewListMethod(_authCred.get(),id));
+		uptr<g_drv::FilesResource_GetMethod> lm(_service->get_files().NewGetMethod(_authCred.get(),dest.getId()));
+		lm->set_fields(FILE_RESOURCE_FIELD);
+		uptr<g_drv::File> file(g_drv::File::New());
+		const g_utl::Status& s=lm->ExecuteAndParseResponse(file.get());
+		const G2FError &e=checkHttpResponse(lm->http_request());
+		if(e)
+			G2FExceptionBuilder("GoogleFS: fail to get node description").throwIt(e);
+
+		fillNode(*file,dest);
+	}
+#define G2F_STRPAIR(str) str,str+sizeof(str)/sizeof(char)-1
+
+	void fillNode(g_drv::File &source,Node &dest)
+	{
+		dest.setId(source.get_id().ToString());
+		dest.setName(source.get_title().ToString());
+		INode::FileType ft=getFileType(splitMime(source.get_mime_type().ToString()));
+		dest.setFileType(ft);
+
+		timespec ts;
+		//gdt2timespec(source.get_created_date(),ts);
+		//leaf->setTime(Node::CreatedTime,ts);
+		gdt2timespec(source.get_modified_date(),ts);
+		dest.setTime(ModificationTime,ts);
+		dest.setTime(ChangeTime,ts);
+		gdt2timespec(source.get_last_viewed_by_me_date(),ts);
+		dest.setTime(AccessTime,ts);
+
+		size_t size=source.get_file_size();
+		dest.setSize(size);
+		if(size)
+		{
+			const g_api::StringPiece& m=source.get_md5_checksum();
+			if(!m.empty())
+			{
+				MD5Signature md5;
+				sp2md5sign(source.get_md5_checksum(),md5);
+				dest.setMD5(md5);
+			}
+		}
+	}
+
+	virtual std::vector<std::string> cloudFetchChildrenList(const std::string &parentId) override
+	{
+		std::vector<std::string> ret;
+
+		uptr<g_drv::ChildrenResource_ListMethod> lm(_service->get_children().NewListMethod(_authCred.get(),parentId));
 		lm->set_fields("etag,items(id)");
 		uptr<g_drv::ChildList> data(g_drv::ChildList::New());
 		const g_utl::Status& s=lm->ExecuteAndParseResponse(data.get());
 		const G2FError &e=checkHttpResponse(lm->http_request());
 		if(e)
-			G2FExceptionBuilder().throwIt(e);
+			G2FExceptionBuilder("GoogleFS: Error reading children list").throwIt(e);
 
 		// There is really problem to work with original Google API: many things doesn't work as must.
 		// Therefore I'll use low level JsonCpp API
@@ -292,68 +357,130 @@ public:
 			for(int i=0;i<boost::numeric_cast<int>(items->size());++i)
 			{
 				const Json::Value& e=(*items)[i];
-				ret->vals.push_back(e.get("id","").asString());
+				ret.push_back(e.get("id","").asString());
 			}
 		}
-		ret->charge();
 		return ret;
 	}
-
-	virtual void fetchMeta(const std::string &id, IMetaWrapper &dest) override
+	virtual void cloudCreateMeta(Node &dest) override
 	{
-		uptr<g_drv::FilesResource_GetMethod> lm(_service->get_files().NewGetMethod(_authCred.get(),id));
+		Json::Value jStorage;
+		g_drv::File f(&jStorage);
+		f.set_title(dest.getName().string());
+
+		Json::Value jParents(Json::ValueType::arrayValue);
+		jParents.append(dest.getParent()->getId());
+		(*f.MutableStorage())["parents"]=jParents;
+		//g_drv::ParentReference pref(jRefStorage);
+		//pref.set_id(dest.getParent()->getId());
+		//f.mutable_parents().set(0,pref);
+
+		if(dest.isFolder())
+			f.set_mime_type(getMimeType(FOLDER_MIME));
+
+		//  const File* _metadata_,
+		// const StringPiece& _media_content_type_,
+		// client::DataReader* _media_content_reader_
+
+		uptr<g_drv::FilesResource_InsertMethod> lm(_service->get_files().NewInsertMethod(_authCred.get(),
+																						 &f,
+																						 "",
+																						 nullptr));
 		lm->set_fields(FILE_RESOURCE_FIELD);
 		uptr<g_drv::File> file(g_drv::File::New());
+
 		const g_utl::Status& s=lm->ExecuteAndParseResponse(file.get());
-		const G2FError &e=checkHttpResponse(lm->http_request());
+		const G2FError &e=checkHttpResponse(lm->mutable_http_request());
 		if(e)
-			G2FExceptionBuilder().throwIt(e);
+			G2FExceptionBuilder("GoogleFS: fail to create node").throwIt(e);
 
-		IMetaWrapper::FileType ft=getFileType(splitMime(file->get_mime_type().ToString()));
-		dest.setId(id);
-		dest.setFileName(file->get_title().ToString());
-		dest.setFileType(ft);
-
-		timespec ts;
-		//gdt2timespec(file->get_created_date(),ts);
-		//leaf->setTime(Node::CreatedTime,ts);
-		gdt2timespec(file->get_modified_date(),ts);
-		dest.setTime(ModificationTime,ts);
-		dest.setTime(ChangeTime,ts);
-		gdt2timespec(file->get_last_viewed_by_me_date(),ts);
-		dest.setTime(AccessTime,ts);
-
-		size_t size=file->get_file_size();
-		dest.setSize(size);
-		//if(ft==FileType::Binary)
-		if(size)
-		{
-			const g_api::StringPiece& m=file->get_md5_checksum();
-			if(!m.empty())
-			{
-				MD5Signature md5;
-				sp2md5sign(file->get_md5_checksum(),md5);
-				dest.setMD5(md5);
-			}
-		}
+		fillNode(*file,dest);
 	}
 
-	virtual IProviderSession *getParent() override
+	virtual ContentManager::IReaderUPtr cloudReadMedia(Node &node) override
 	{
-		return _parent;
+		uptr<g_drv::FilesResource_GetMethod> lm(_service->get_files().NewGetMethod(_authCred.get(),node.getId()));
+		lm->set_alt("media");
+		return std::make_unique<ContentReader>(std::move(lm));
+	}
+
+	virtual void cloudUpdate(Node &node,INodePatch* patchMeta,const std::string &mediaType,ContentManager::IReader *content) override
+	{
+		assert(patchMeta || content);
+
+		Json::Value jStorage;
+		g_drv::File f(&jStorage);
+		const g_drv::File* metadata=nullptr;
+		if(patchMeta)
+		{
+			std::string data;
+			if(patchMeta->is(INodePatch::MimeType))
+			{
+				patchMeta->getMimeType(data);
+				f.set_mime_type(data);
+				metadata=&f;
+			}
+			if(patchMeta->is(INodePatch::Name))
+			{
+				fs::path p;
+				patchMeta->getName(p);
+				f.set_title(p.string());
+				metadata=&f;
+			}
+		}
+
+		uptr<GoogleReader> dataReader;
+		if(content)
+			dataReader=std::make_unique<GoogleReader>(content);
+
+		// Takes ownership about dataReader
+		uptr<g_drv::FilesResource_UpdateMethod> lm(_service->get_files().NewUpdateMethod(_authCred.get(),
+																						 node.getId(),
+																						 metadata,
+																						 mediaType,
+																						 dataReader.release()));
+		lm->Execute();
+		const G2FError &e=checkHttpResponse(lm->mutable_http_request());
+		if(e.isError())
+			G2FExceptionBuilder("GoogleFS: Fail to update data").throwIt(e);
 	}
 
 private:
-	IProviderSession *_parent=nullptr;
 	sptr<g_drv::DriveService> _service;
 	OAuth2CredentialPtr _authCred;
 };
+G2F_DECLARE_PTR(GoogleFileSystem);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
 /**
  * @brief produce HttpTransport
- */
+ *
+ *******************************/
 class HttpTransportFactory
 {
 public:
@@ -376,10 +503,12 @@ private:
 
 
 
-//
-//   OAuth2 process
-//
-/////////////////////////////////////////
+
+
+/**
+ * @brief OAuth2 process
+ *
+ ******************************************/
 class GoogleOAuth2 : public IOAuth2Process
 {
 	// IOAuth2Process interface
@@ -450,10 +579,6 @@ private:
 
 //
 //   Provider Session Configuration
-//
-/////////////////////////////////////////
-//
-//   Provider Configuration
 //
 /////////////////////////////////////////
 class GoogleProviderSessionProperties : public AbstractFileStaticInitPropertiesList
@@ -553,9 +678,16 @@ public:
 
 	// IProviderSession interface
 public:
-	virtual IDataProviderPtr createDataProvider() override
+	virtual IFileSystemPtr getFileSystem() override
 	{
-		return std::make_shared<GoogleDataProvider>(this,_service,getAuthCred());
+		if(!_fs)
+		{
+			_fs=std::make_shared<GoogleFileSystem>(
+						std::make_shared<ContentManager>(_conf->getPaths()->getDir(IPathManager::DATA)),
+						_service,
+						getAuthCred());
+		}
+		return _fs;
 	}
 
 	virtual IOAuth2ProcessPtr createOAuth2Process() override
@@ -608,6 +740,7 @@ private:
 	OAuth2CredentialPtr _authCred;
 	IProvider *_parent=nullptr;
 	IConfigurationPtr _conf;
+	GoogleFileSystemPtr _fs;
 
 };
 

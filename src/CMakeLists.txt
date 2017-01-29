@@ -69,13 +69,14 @@ set(SRC_LIST	main.cpp
                 control/types/PropertyTypeUint.cpp
                 control/types/PropertyTypeUint.h
 
+                fs/AbstractFileSystem.h
+                fs/AbstractFileSystem.cpp
                 fs/ConfFileSystem.cpp
+                fs/ConfFileSystem.h
                 fs/ContentManager.h
                 fs/ContentManager.cpp
                 fs/JoinedFileSystem.cpp
                 fs/JoinedFileSystem.h
-                fs/RegularFileSystem.h
-                fs/RegularFileSystem.cpp
                 fs/IContentHandle.cpp
                 fs/IContentHandle.h
                 fs/IFileSystem.h
@@ -90,10 +91,7 @@ set(SRC_LIST	main.cpp
                 providers/IConversionDescription.h
                 providers/IConversionIterator.h
                 providers/IConvertFormat.h
-                providers/IDataProvider.h
                 providers/IDataReader.h
-                providers/IIdList.h
-                providers/IMetaWrapper.h
                 providers/IOAuth2Process.h
                 providers/IProvider.h
                 providers/IProviderSession.h

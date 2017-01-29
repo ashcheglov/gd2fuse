@@ -68,9 +68,11 @@ public:
 
 	virtual bool equivalent(int code,const err::error_condition &condition) const  BOOST_SYSTEM_NOEXCEPT override
 	{
-		if(condition.category()==err::system_category())
+		int cond=condition.value();
+		if(code==0 && cond==0)
+			return true;
+		if(condition.category()==err::generic_category())
 		{
-			int cond=condition.value();
 			switch (code)
 			{
 			case Success:
@@ -164,6 +166,11 @@ G2FError &G2FError::setDetail(const std::string &detail)
 const std::string &G2FError::getDetail()
 {
 	return _detail;
+}
+
+bool G2FError::isError() const
+{
+	return value()!=0;
 }
 
 G2FError &G2FError::operator=(const boost::system::error_code &ec) BOOST_SYSTEM_NOEXCEPT

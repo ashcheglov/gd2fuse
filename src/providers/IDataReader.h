@@ -14,5 +14,4 @@ public:
 
 	virtual ~IDataReader() {}
 };
-
 G2F_DECLARE_PTR(IDataReader);

@@ -273,6 +273,12 @@ public:
 
 	// IFileSystem interface
 public:
+	virtual INotify *getNotifier() override
+	{
+		// TODO
+		return nullptr;
+	}
+
 	virtual INode *getRoot() override
 	{
 		return _mountedRoot.get();
@@ -298,6 +304,18 @@ public:
 		return nullptr;
 	}
 
+	virtual INode *createNode(const boost::filesystem::path &path,bool isDirectory) override
+	{
+		fs::path::iterator it=path.begin();
+		JoinedNode *p=_mountedRoot->findMountPoint(++it,path.end());
+		if(p && it!=path.end())
+		{
+			fs::path rest("/");
+			rest/=fromPathIt(it,path.end());
+			return p->_fs->createNode(rest,isDirectory);
+		}
+		return nullptr;
+	}
 private:
 	JoinedNodeUPtr _mountedRoot;
 	//std::vector<std::pair<fs::path,IFileSystemPtr>> _mounts;

@@ -12,6 +12,13 @@ class INode
 {
 
 public:
+	enum class FileType
+	{
+		Directory,
+		Exported,
+		Binary,
+		Shortcut
+	};
 
 	virtual void setId(const std::string &id) =0;
 	virtual bool isFolder() =0;
