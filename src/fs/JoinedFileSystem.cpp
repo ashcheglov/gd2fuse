@@ -181,7 +181,7 @@ class JoinedFileSystem : public IFileSystem
 			{
 				NodeList::iterator itNext=std::find_if(curr->_next.begin(),curr->_next.end(),
 													   [&it](JoinedNode &n){return n.getName()==*it;});
-				if(itNext==_next.end())
+				if(itNext==curr->_next.end())
 				{
 					// Build branch
 					_next.push_back(new JoinedNode(curr,*it,mode));
@@ -304,13 +304,13 @@ public:
 		return nullptr;
 	}
 
-	virtual INode *createNode(const fs::path &path,bool isDirectory) override
+	virtual CreateResult createNode(const fs::path &path,bool isDirectory) override
 	{
 		fs::path rest;
 		const IFileSystemPtr &fs=getFS(path,rest);
 		if(fs)
 			return fs->createNode(rest,isDirectory);
-		return nullptr;
+		return std::make_tuple(CreateBadPath,nullptr);
 	}
 
 	virtual RemoveStatus removeNode(const fs::path &p) override
@@ -319,7 +319,7 @@ public:
 		const IFileSystemPtr &fs=getFS(p,rest);
 		if(fs)
 			return fs->removeNode(rest);
-		return RemoveStatus::NotFound;
+		return RemoveStatus::RemoveNotFound;
 	}
 
 	IFileSystemPtr getFS(const fs::path &path,fs::path &fsPath)

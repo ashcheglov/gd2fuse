@@ -242,7 +242,6 @@ int g2f_fgetattr (const char *path, struct stat *statbuf, struct fuse_file_info 
 /** Change the size of a file */
 int g2f_truncate (const char *path, off_t newSize)
 {
-	// TODO
 	G2F_LOG_SCOPE();
 	G2F_LOG("path=" << path << ", newSize=" << newSize);
 
@@ -277,34 +276,24 @@ int g2f_create (const char *path, mode_t mode, struct fuse_file_info *fi)
 	G2F_LOG("path=" << path << ", flags=" << fi->flags);
 
 	// NOTE Implement transactions
+	INode *f=nullptr;
+	posix_error_code err=G2F_DATA->createFile(path,fi->flags,f);
 
-	//INode *f=G2F_DATA->createFile(p,fi->flags);
-	INode *f=G2F_DATA->getINode(path);
-	if(f)
+
+	if(!err)
 	{
-		if(f->isFolder())
-			return -EISDIR;
-	}
-	else
-	{
-		fs::path p(path);
-		INode *n=G2F_DATA->getINode(p.parent_path().c_str());
-		if(!n->isFolder())
-			return -ENOTDIR;
-		f=G2F_DATA->createFile(path,fi->flags);
-	}
-	IContentHandle *chn=f->openContent(fi->flags);
+		G2F_LOG("node id=" << f->getId() << ", name=" << f->getName());
 
-	G2F_LOG("node id=" << f->getId() << ", name=" << f->getName());
-
-	fi->nonseekable=0;
-	fi->direct_io=chn->useDirectIO()?1:0;
-	assert(chn!=0);
-	int err=chn->getError();
-	if(err)
-		delete chn;
-	else
-		fi->fh=CONTENTHANDLEPTR_2_FH(chn);
+		IContentHandle *chn=f->openContent(fi->flags);
+		fi->nonseekable=0;
+		fi->direct_io=chn->useDirectIO()?1:0;
+		assert(chn!=0);
+		int err=chn->getError();
+		if(err)
+			delete chn;
+		else
+			fi->fh=CONTENTHANDLEPTR_2_FH(chn);
+	}
 
 	G2F_LOG("errno=" << err << ", fd=" << fi->fh);
 
@@ -357,13 +346,9 @@ int g2f_unlink (const char *path)
 {
 	G2F_LOG_SCOPE();
 	G2F_LOG("path=" << path);
-	INode *f=G2F_DATA->getINode(path);
-	if(!f)
-		return -ENOENT;
-	if(f->isFolder())
-		return -EISDIR;
-	posix_error_code ret=G2F_DATA->removeINode(path);
-	return -ret;
+	posix_error_code err=G2F_DATA->removeINode(path);
+	G2F_LOG("errno=" << err);
+	return -err;
 }
 
 /** Create a directory
@@ -374,10 +359,25 @@ int g2f_unlink (const char *path)
   * */
 int g2f_mkdir(const char *path, mode_t mode)
 {
-	// TODO
 	G2F_LOG_SCOPE();
-	G2F_LOG("path=" << path << ", UNIMPLEMENTED");
-	return -ENOSYS;
+	G2F_LOG("path=" << path << ", mode=" << mode);
+
+
+	INode *f=nullptr;
+	posix_error_code err=G2F_DATA->createDir(path,mode,f);
+
+	G2F_LOG("errno=" << err);
+	return -err;
+}
+
+/** Remove a directory */
+int g2f_rmdir (const char *path)
+{
+	G2F_LOG_SCOPE();
+	G2F_LOG("path=" << path);
+	posix_error_code err=G2F_DATA->removeINode(path);
+	G2F_LOG("errno=" << err);
+	return -err;
 }
 
 
@@ -403,14 +403,6 @@ int g2f_readlink (const char *path, char *link, size_t size)
   * regular files that will be called instead.
   */
 int g2f_mknod(const char *path, mode_t mode, dev_t dev)
-{
-	G2F_LOG_SCOPE();
-	G2F_LOG("path=" << path << ", UNIMPLEMENTED");
-	return -ENOSYS;
-}
-
-/** Remove a directory */
-int g2f_rmdir (const char *path)
 {
 	G2F_LOG_SCOPE();
 	G2F_LOG("path=" << path << ", UNIMPLEMENTED");
@@ -807,11 +799,11 @@ void g2f_init_ops(fuse_operations* ops)
 	ops->write = g2f_write;
 	ops->unlink = g2f_unlink;
 	ops->mkdir = g2f_mkdir;
+	ops->rmdir = g2f_rmdir;
 
 	ops->readlink = g2f_readlink;
 	//ops->getdir = NULL;
 	ops->mknod = g2f_mknod;
-	ops->rmdir = g2f_rmdir;
 	ops->symlink = g2f_symlink;
 	ops->rename = g2f_rename;
 	ops->link = g2f_link;

@@ -145,7 +145,10 @@ G2FError checkHttpResponse(const g_cli::HttpRequest* request)
 
 
 
-
+/**
+ * @brief The AbstractGoogleConfiguration class
+ *
+ ********************************************************/
 class AbstractGoogleConfiguration : public IConfiguration
 {
 	// IConfiguration interface
@@ -179,10 +182,10 @@ protected:
 
 
 
-//
-//   Data Reader
-//
-/////////////////////////////////////////
+/**
+ * @brief Data Reader
+ *
+ *****************************************************/
 class ContentReader : public ContentManager::IReader
 {
 public:
@@ -368,19 +371,17 @@ protected:
 		g_drv::File f(&jStorage);
 		f.set_title(dest.getName().string());
 
-		Json::Value jParents(Json::ValueType::arrayValue);
-		jParents.append(dest.getParent()->getId());
-		(*f.MutableStorage())["parents"]=jParents;
-		//g_drv::ParentReference pref(jRefStorage);
-		//pref.set_id(dest.getParent()->getId());
-		//f.mutable_parents().set(0,pref);
+		Json::Value jRefStorage;
+		g_drv::ParentReference pref(&jRefStorage);
+		pref.set_id(dest.getParent()->getId());
+
+		Json::Value jParentsStorage;
+		g_cli::JsonCppArray<g_drv::ParentReference> parents(&jParentsStorage);
+		parents.set(0,pref);
+		(*f.MutableStorage())["parents"]=*parents.MutableStorage();
 
 		if(dest.isFolder())
 			f.set_mime_type(getMimeType(FOLDER_MIME));
-
-		//  const File* _metadata_,
-		// const StringPiece& _media_content_type_,
-		// client::DataReader* _media_content_reader_
 
 		uptr<g_drv::FilesResource_InsertMethod> lm(_service->get_files().NewInsertMethod(_authCred.get(),
 																						 &f,
@@ -589,10 +590,10 @@ private:
 
 
 
-//
-//   Provider Session Configuration
-//
-/////////////////////////////////////////
+/**
+ * @brief Provider Session Configuration
+ *
+ *********************************************************/
 class GoogleProviderSessionProperties : public AbstractFileStaticInitPropertiesList
 {
 
@@ -669,10 +670,10 @@ private:
 
 
 
-//
-//   Provider Session
-//
-/////////////////////////////////////////
+/**
+ * @brief The GoogleProviderSession class
+ *
+ *****************************************************/
 class GoogleProviderSession : public IProviderSession
 {
 public:
@@ -760,10 +761,10 @@ private:
 
 
 
-//
-//   Provider Configuration
-//
-/////////////////////////////////////////
+/**
+ *			Provider Configuration
+ *
+ *********************************************/
 namespace
 {
 
@@ -887,10 +888,10 @@ private:
 
 
 
-//
-//   Provider
-//
-/////////////////////////////////////////
+/**
+ * @brief The GoogleProvider class
+ *
+ ****************************************/
 class GoogleProvider : public IProvider
 {
 public:

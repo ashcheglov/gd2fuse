@@ -12,9 +12,17 @@ class IFileSystem
 public:
 	enum RemoveStatus
 	{
-		Success,
-		NotFound,
-		Forbidden
+		RemoveSuccess,
+		RemoveNotFound,
+		RemoveForbidden
+	};
+
+	enum CreateStatus
+	{
+		CreateSuccess,
+		CreateAlreadyExists,
+		CreateForbidden,
+		CreateBadPath
 	};
 
 	class INotify
@@ -29,10 +37,12 @@ public:
 		virtual ~INotify(){}
 	};
 
+	typedef std::tuple<CreateStatus,INode*> CreateResult;
+
 	virtual INotify* getNotifier() =0;
 	virtual INode* getRoot() =0;
 	virtual INode* get(const fs::path &p) =0;
-	virtual INode* createNode(const fs::path &p,bool isDirectory) =0;
+	virtual CreateResult createNode(const fs::path &p,bool isDirectory) =0;
 	virtual RemoveStatus removeNode(const fs::path &p) =0;
 
 	virtual ~IFileSystem() {}

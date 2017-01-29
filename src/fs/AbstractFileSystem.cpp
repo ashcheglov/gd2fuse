@@ -353,7 +353,7 @@ AbstractFileSystem::Node *AbstractFileSystem::Node::find(fs::path::iterator &it,
 	{
 		AbstractFileSystem::Node::iterator itNext=std::find_if(ret->_next.begin(),ret->_next.end(),
 										   [&it](AbstractFileSystem::Node &n){return n.getName()==*it;});
-		if(itNext==_next.end())
+		if(itNext==ret->_next.end())
 			break;
 		ret=&*itNext;
 	}
@@ -483,16 +483,25 @@ INode *AbstractFileSystem::get(const fs::path &path)
 	return 0;
 }
 
-INode *AbstractFileSystem::createNode(const fs::path &path,bool isDirectory)
+IFileSystem::CreateResult AbstractFileSystem::createNode(const fs::path &path,bool isDirectory)
 {
 	fs::path::iterator it=path.begin(),itEnd=path.end();
 	Node *n=getRoot()->find(++it,itEnd);
 	size_t entries=std::distance(it,itEnd);
-	while(entries>1)
+	if(!entries)
+		return std::make_tuple(CreateAlreadyExists,nullptr);
+
+	uptr<Node> nn;
+	while(entries>0)
 	{
-		uptr<Node> nn(new Node(this,n));
+		nn=std::make_unique<Node>(this,n);
 		nn->setName(*it);
 		nn->setFileType(INode::FileType::Directory);
+
+		// last entry - file or dir (depends from flag)
+		if(entries==1 && !isDirectory)
+			nn->setFileType(INode::FileType::Binary);
+
 		cloudCreateMeta(*nn);
 		n->addNext(nn.get());
 		n=nn.release();
@@ -500,27 +509,21 @@ INode *AbstractFileSystem::createNode(const fs::path &path,bool isDirectory)
 		--entries;
 		++it;
 	}
-
-	uptr<Node> nn(new Node(this,n));
-	nn->setName(*it);
-	nn->setFileType(INode::FileType::Binary);
-	cloudCreateMeta(*nn);
-	n->addNext(nn.get());
-	return nn.release();
+	return std::make_tuple(CreateSuccess,n);
 }
 
 IFileSystem::RemoveStatus AbstractFileSystem::removeNode(const fs::path &path)
 {
 	INode *n=get(path);
 	if(!n)
-		return IFileSystem::NotFound;
+		return IFileSystem::RemoveNotFound;
 	Node *node=dynamic_cast<Node*>(n);
 	assert(node);
 	Node *parent=node->getParent();
 	if(!parent)
-		return IFileSystem::Forbidden;
+		return IFileSystem::RemoveForbidden;
 	parent->removeNodes(node);
-	return IFileSystem::Success;
+	return IFileSystem::RemoveSuccess;
 }
 
 void AbstractFileSystem::updateNodeContent(INode &n)

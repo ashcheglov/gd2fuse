@@ -15,10 +15,12 @@ public:
 	FuseGate(IProviderSession &ps);
 	int run(const FUSEOpts &fuseOpts);
 
-	INode *getINode(const char *path);
-	INode *createFile(const char *fileName, int flags);
 	IFileSystem& getFS();
+
+	INode *getINode(const char *path);
+	posix_error_code createFile(const char *fileName, int flags, INode *&f);
 	posix_error_code removeINode(const char *path);
+	posix_error_code createDir(const char *dirName,mode_t mode,INode *&f);
 
 	static int fuseHelp();
 

@@ -111,7 +111,7 @@ public:
 	virtual INotify *getNotifier() override;
 	virtual Node *getRoot() override;
 	virtual INode *get(const fs::path &path) override;
-	virtual INode *createNode(const fs::path &path,bool isDirectory) override;
+	virtual CreateResult createNode(const fs::path &path,bool isDirectory) override;
 	virtual RemoveStatus removeNode(const fs::path &path) override;
 
 protected:

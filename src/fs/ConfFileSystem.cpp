@@ -354,14 +354,14 @@ public:
 		return _root->get(p.filename());
 	}
 
-	virtual INode *createNode(const fs::path &p,bool isDirectory) override
+	virtual CreateResult createNode(const fs::path &p,bool isDirectory) override
 	{
-		return nullptr;
+		return std::make_tuple(CreateForbidden,nullptr);
 	}
 
 	virtual RemoveStatus removeNode(const fs::path &p) override
 	{
-		return RemoveStatus::Forbidden;
+		return RemoveStatus::RemoveForbidden;
 	}
 
 private:
