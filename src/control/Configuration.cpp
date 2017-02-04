@@ -1,5 +1,5 @@
 #include "Configuration.h"
-#include "props/AbstractFileStaticInitPropertiesList.h"
+#include "props/AbstractMemoryStaticInitPropertiesList.h"
 #include "paths/PathManager.h"
 
 
@@ -48,7 +48,7 @@ const AbstractStaticInitPropertiesList::EnumDefi enumDefi[]=
 }
 
 
-class GlobalProperties : public AbstractFileStaticInitPropertiesList
+class GlobalProperties : public AbstractMemoryStaticInitPropertiesList
 {
 
 public:
@@ -77,7 +77,7 @@ protected:
 
 	// AbstractFileStaticInitPropertiesList interface
 public:
-	virtual boost::filesystem::path getPropertiesFileName() override
+	virtual boost::filesystem::path getPropertiesFileName()
 	{
 		return _fileName;
 	}

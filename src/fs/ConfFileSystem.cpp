@@ -121,15 +121,18 @@ public:
 			}
 
 			std::string newVal(buf,size);
-			if(_p->setValue(newVal).isError())
+			// TODO flag about changes
+			const G2FError &e=_p->setValue(newVal);
+			if(e.isError())
 			{
-				_error=EINVAL;
+				_error=e.value();
 				return -1;
 			}
 			return size;
 		}
 		virtual void close() override
 		{
+			// TODO Notify others about changes
 		}
 	private:
 		posix_error_code _error=0;

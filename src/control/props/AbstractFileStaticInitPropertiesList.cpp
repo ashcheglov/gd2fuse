@@ -121,10 +121,11 @@ public:
 			{
 				if(!fs::exists(p.parent_path()))
 					fs::create_directories(p.parent_path());
+				fs::ofstream newFile(p);
 			}
 			fs::fstream f(p);
 			if(!f)
-				G2F_EXCEPTION("Can not open file '%1'").arg(p).throwItSystem(ENOENT);
+				G2F_EXCEPTION("Can not open file '%1'").arg(p).throwItSystem(EACCES);
 			f.exceptions(std::fstream::failbit|std::fstream::badbit);
 			bool changed=updateConf(f,_upstream->getName(),val);
 			if(changed)

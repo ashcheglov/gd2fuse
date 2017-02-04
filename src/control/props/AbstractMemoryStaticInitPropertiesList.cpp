@@ -2,7 +2,6 @@
 #include "IPropertiesList.h"
 #include "control/Application.h"
 #include "control/types/PropertyTypesRegistry.h"
-#include <boost/algorithm/string.hpp>
 
 /**
  * @brief InMemoryProperty set value only in memory - without any persistence
@@ -34,7 +33,9 @@ public:
 	virtual G2FError setValue(const std::string &val) override
 	{
 		std::string lv(val);
-		boost::to_lower(lv);
+		AbstractStaticInitPropertiesList::normalizeValue(lv);
+		if(!_upstream->getType()->checkValidity(lv))
+			return G2FError(EINVAL,err::system_category());
 
 		bool c=false;
 		if((ISSET_TIMESPEC(_lastChange) && lv!=_value) || lv!=_upstream->getValue())
@@ -42,7 +43,7 @@ public:
 
 		if(c)
 		{
-			_value=val;
+			_value=lv;
 			clock_gettime(CLOCK_REALTIME,&_lastChange);
 		}
 		return G2FError();

@@ -331,6 +331,8 @@ int g2f_write (const char *path, const char *buf, size_t size, off_t offset,
 	G2F_LOG("path=" << path << ", fd=" << fi->fh << ", bufsize=" << size << ", offset=" << offset);
 	IContentHandle *chn=FH_2_CONTENTHANDLEPTR(fi->fh);
 	int ret=chn->write(buf,size,offset);
+	if(chn->getError()!=0)
+		ret=-chn->getError();
 	G2F_LOG("errno=" << ret);
 	return ret;
 }

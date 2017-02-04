@@ -4,7 +4,7 @@
 #include "providers/IProvider.h"
 #include "providers/IDataReader.h"
 #include "error/G2FException.h"
-#include "control/props/AbstractFileStaticInitPropertiesList.h"
+#include "control/props/AbstractMemoryStaticInitPropertiesList.h"
 #include "control/ChainedCofiguration.h"
 #include "control/paths/PathManager.h"
 #include "fs/AbstractFileSystem.h"
@@ -638,7 +638,7 @@ private:
  * @brief Provider Session Configuration
  *
  *********************************************************/
-class GoogleProviderSessionProperties : public AbstractFileStaticInitPropertiesList
+class GoogleProviderSessionProperties : public AbstractMemoryStaticInitPropertiesList
 {
 
 public:
@@ -668,7 +668,7 @@ protected:
 
 	// AbstractFileStaticInitPropertiesList interface
 public:
-	virtual boost::filesystem::path getPropertiesFileName() override
+	virtual boost::filesystem::path getPropertiesFileName()
 	{
 		return _fileName;
 	}
@@ -858,7 +858,7 @@ const AbstractStaticInitPropertiesList::EnumDefi enumDefi[]=
 }
 
 
-class GoogleProviderProperties : public AbstractFileStaticInitPropertiesList
+class GoogleProviderProperties : public AbstractMemoryStaticInitPropertiesList
 {
 
 public:
@@ -887,7 +887,7 @@ protected:
 
 	// AbstractFileStaticInitPropertiesList interface
 public:
-	virtual boost::filesystem::path getPropertiesFileName() override
+	virtual boost::filesystem::path getPropertiesFileName()
 	{
 		return _fileName;
 	}

@@ -3,6 +3,7 @@
 #include <map>
 #include "control/Application.h"
 #include "control/types/PropertyTypesRegistry.h"
+#include <boost/algorithm/string.hpp>
 
 
 //
@@ -199,6 +200,14 @@ IPropertyIteratorPtr AbstractStaticInitPropertiesList::getProperties()
 {
 	G2F_PROP_IMPL_LAZY(_impl);
 	return _impl->getIterator();
+}
+
+std::string &AbstractStaticInitPropertiesList::normalizeValue(std::string &value)
+{
+	boost::to_lower(value);
+	std::string syms(" \n\t");
+	boost::trim_if(value,[&](const auto &c){ return syms.find(c)!=std::string::npos;});
+	return value;
 }
 
 IPropertyDefinitionPtr AbstractStaticInitPropertiesList::decorate(const IPropertyDefinitionPtr &p)

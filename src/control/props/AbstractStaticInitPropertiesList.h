@@ -41,6 +41,8 @@ public:
 	virtual size_t getPropertiesSize() override;
 	virtual IPropertyIteratorPtr getProperties() override;
 
+	static std::string& normalizeValue(std::string& value);
+
 protected:
 	virtual std::pair<const PropDefi*,size_t> getPropertiesDefinition() =0;
 	virtual std::pair<const EnumDefi*,size_t> getEnumsDefinition() =0;

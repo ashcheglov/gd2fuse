@@ -9,9 +9,6 @@
  * ***********************************************************/
 class AbstractMemoryStaticInitPropertiesList : public AbstractStaticInitPropertiesList
 {
-public:
-	virtual fs::path getPropertiesFileName() =0;
-
 protected:
 	virtual IPropertyDefinitionPtr decorate(const IPropertyDefinitionPtr &p);
 };
