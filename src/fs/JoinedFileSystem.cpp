@@ -103,9 +103,9 @@ class JoinedFileSystem : public IFileSystem
 	public:
 		virtual void setId(const std::string &id) override
 		{}
-		virtual bool isFolder() override
+		virtual NodeType getNodeType() override
 		{
-			return true;
+			return NodeType::Directory;
 		}
 		virtual void fillAttr(struct stat &statbuf) override
 		{
@@ -145,13 +145,6 @@ class JoinedFileSystem : public IFileSystem
 			if(what==TimeAttrib::AccessTime)
 				return _lastAccess;
 			return Application::instance()->startTime();
-		}
-		virtual void setMD5(const MD5Signature &md5) override
-		{
-		}
-		virtual MD5Signature getMD5() override
-		{
-			return MD5Signature();
 		}
 		virtual IDirectoryIteratorPtr getDirectoryIterator() override
 		{
@@ -273,7 +266,7 @@ public:
 
 	// IFileSystem interface
 public:
-	virtual INotify *getNotifier() override
+	virtual INotifier *getNotifier() override
 	{
 		// TODO
 		return nullptr;
@@ -320,6 +313,64 @@ public:
 		if(fs)
 			return fs->removeNode(rest);
 		return RemoveStatus::RemoveNotFound;
+	}
+
+	virtual void renameNode(const fs::path &oldPath,const fs::path &newPath) override
+	{
+		if(oldPath==newPath)
+			return;
+
+		fs::path oldRest;
+		INode *oldN=nullptr;
+		const IFileSystemPtr &oldFS=getFS(oldPath,oldRest);
+		if(!oldFS || !(oldN=oldFS->get(oldRest)))
+			G2F_EXCEPTION("File '%1' not found").arg(oldPath).throwItSystem(ENOENT);
+		if(oldRest.empty())
+			G2F_EXCEPTION("Can't rename mountpoint '%1'").arg(oldPath).throwItSystem(EPERM);
+
+		fs::path newRest;
+		const IFileSystemPtr &newFS=getFS(newPath,newRest);
+		if(!newFS)
+			G2F_EXCEPTION("File '%1' out of file system").arg(newPath).throwItSystem(ENOENT);
+		if(newRest.empty())
+			G2F_EXCEPTION("Can't rename mountpoint '%1'").arg(newPath).throwItSystem(EPERM);
+
+		// Within same FS
+		if(oldFS==newFS)
+		{
+			newFS->renameNode(oldRest,newRest);
+			return;
+		}
+
+		INode *newN=newFS->get(newRest);
+		if(newN)
+		{
+			newFS->replaceNode(newRest,*oldN);
+			oldFS->removeNode(oldRest);
+			return;
+		}
+
+		newFS->insertNode(newRest.parent_path(),*oldN);
+		oldFS->removeNode(oldRest);
+	}
+
+
+	virtual void replaceNode(const fs::path &pathToReplace,INode &onThis)
+	{
+		fs::path rest;
+		const IFileSystemPtr &fs=getFS(pathToReplace,rest);
+		if(!fs)
+			G2F_EXCEPTION("Entry lay out of filesystem").throwItSystem(ENOENT);
+		fs->replaceNode(rest,onThis);
+	}
+
+	virtual void insertNode(const fs::path &parentPath,INode &that)
+	{
+		fs::path rest;
+		const IFileSystemPtr &fs=getFS(parentPath,rest);
+		if(!fs)
+			G2F_EXCEPTION("Entry lay out of filesystem").throwItSystem(ENOENT);
+		fs->insertNode(rest,that);
 	}
 
 	IFileSystemPtr getFS(const fs::path &path,fs::path &fsPath)

@@ -17,6 +17,7 @@ public:
 	Cache &insert(const fs::path& path, const std::string &id, INode *node);
 
 	void slotNodeRemoved(INode &node);
+	void slotNodeChanged(INode &node, int);
 
 private:
 	boost::shared_mutex _m;

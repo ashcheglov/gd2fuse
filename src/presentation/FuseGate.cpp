@@ -53,29 +53,117 @@ IFileSystem &FuseGate::getFS()
 
 INode *FuseGate::getINode(const char *path)
 {
-	return _fs->get(path);
+	try
+	{
+		return _fs->get(path);
+	}
+	catch(const G2FException &e)
+	{
+		std::cerr << e.what() << std::endl;
+	}
+	return nullptr;
 }
 
-posix_error_code FuseGate::createFile(const char *fileName, int flags, INode *&f)
+posix_error_code FuseGate::openContent(const char *path, int flags, IContentHandle *&outChn)
 {
-	fs::path p(fileName);
-
-	f=_fs->get(p);
-	if(f)
+	posix_error_code err=0;
+	try
 	{
-		if(f->isFolder())
+		INode *n=_fs->get(path);
+		if(!n)
+			return ENOENT;
+		if(n->isFolder())
 			return EISDIR;
+		IContentHandle *chn=n->openContent(flags);
+		assert(chn!=0);
+		err=chn->getError();
+		if(err)
+			delete chn;
+		outChn=chn;
 	}
-	else
+	catch(const G2FException &e)
 	{
-		INode *n=_fs->get(p.parent_path().c_str());
-		if(!n->isFolder())
-			return ENOTDIR;
+		std::cerr << e.what() << std::endl;
+		return e.code().default_error_condition().value();
 	}
-	if(!f)
+	return err;
+}
+
+posix_error_code FuseGate::createFile(const char *fileName, INode *&f)
+{
+	try
 	{
+		fs::path p(fileName);
+
+		f=_fs->get(p);
+		if(f)
+		{
+			if(f->isFolder())
+				return EISDIR;
+		}
+		else
+		{
+			INode *n=_fs->get(p.parent_path().c_str());
+			if(!n->isFolder())
+				return ENOTDIR;
+		}
+		if(!f)
+		{
+			IFileSystem::CreateStatus s;
+			std::tie(s,f)=_fs->createNode(fileName,false);
+
+			switch(s)
+			{
+			case IFileSystem::CreateSuccess:
+				return 0;
+			case IFileSystem::CreateAlreadyExists:
+				return EEXIST;
+			case IFileSystem::CreateForbidden:
+				return EPERM;
+			case IFileSystem::CreateBadPath:
+				return EISDIR;
+			default:
+				assert(false);
+				return EACCES;
+			}
+		}
+	}
+	catch(const G2FException &e)
+	{
+		std::cerr << e.what() << std::endl;
+		return e.code().default_error_condition().value();
+	}
+	return 0;
+}
+
+posix_error_code FuseGate::removeINode(const char *path)
+{
+	try
+	{
+		IFileSystem::RemoveStatus ret=_fs->removeNode(path);
+		if(ret==IFileSystem::RemoveStatus::RemoveSuccess)
+			return 0;
+		if(ret==IFileSystem::RemoveStatus::RemoveNotFound)
+			return ENOENT;
+		//if(ret==IFileSystem::RemoveStatus::Forbidden)
+		return EPERM;
+	}
+	catch(const G2FException &e)
+	{
+		std::cerr << e.what() << std::endl;
+		return e.code().default_error_condition().value();
+	}
+	return 0;
+}
+
+posix_error_code FuseGate::createDir(const char *dirName, mode_t mode, INode *&f)
+{
+	try
+	{
+		fs::path path(dirName);
+
 		IFileSystem::CreateStatus s;
-		std::tie(s,f)=_fs->createNode(fileName,false);
+		std::tie(s,f)=_fs->createNode(dirName,true);
 
 		switch(s)
 		{
@@ -86,46 +174,30 @@ posix_error_code FuseGate::createFile(const char *fileName, int flags, INode *&f
 		case IFileSystem::CreateForbidden:
 			return EPERM;
 		case IFileSystem::CreateBadPath:
-			return EISDIR;
+			return ENOTDIR;
 		default:
 			assert(false);
 			return EACCES;
 		}
 	}
+	catch(const G2FException &e)
+	{
+		std::cerr << e.what() << std::endl;
+		return e.code().default_error_condition().value();
+	}
 	return 0;
 }
 
-posix_error_code FuseGate::removeINode(const char *path)
+posix_error_code FuseGate::rename(const char *oldName, const char *newName)
 {
-	IFileSystem::RemoveStatus ret=_fs->removeNode(path);
-	if(ret==IFileSystem::RemoveStatus::RemoveSuccess)
-		return 0;
-	if(ret==IFileSystem::RemoveStatus::RemoveNotFound)
-		return ENOENT;
-	//if(ret==IFileSystem::RemoveStatus::Forbidden)
-	return EPERM;
-}
-
-posix_error_code FuseGate::createDir(const char *dirName, mode_t mode, INode *&f)
-{
-	fs::path path(dirName);
-
-	IFileSystem::CreateStatus s;
-	std::tie(s,f)=_fs->createNode(dirName,true);
-
-	switch(s)
+	try
 	{
-	case IFileSystem::CreateSuccess:
-		return 0;
-	case IFileSystem::CreateAlreadyExists:
-		return EEXIST;
-	case IFileSystem::CreateForbidden:
-		return EPERM;
-	case IFileSystem::CreateBadPath:
-		return ENOTDIR;
-	default:
-		assert(false);
-		return EACCES;
+		_fs->renameNode(oldName,newName);
+	}
+	catch(const G2FException &e)
+	{
+		std::cerr << e.what() << std::endl;
+		return e.code().default_error_condition().value();
 	}
 	return 0;
 }

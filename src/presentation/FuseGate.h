@@ -18,9 +18,11 @@ public:
 	IFileSystem& getFS();
 
 	INode *getINode(const char *path);
-	posix_error_code createFile(const char *fileName, int flags, INode *&f);
+	posix_error_code openContent(const char *path,int flags, IContentHandle *&outChn);
+	posix_error_code createFile(const char *fileName, INode *&f);
 	posix_error_code removeINode(const char *path);
 	posix_error_code createDir(const char *dirName,mode_t mode,INode *&f);
+	posix_error_code rename(const char *oldName,const char *newName);
 
 	static int fuseHelp();
 

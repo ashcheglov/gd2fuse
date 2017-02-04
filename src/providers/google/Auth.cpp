@@ -117,6 +117,8 @@ public:
 
 		OAuth2CredentialPtr ret(new g_cli::OAuth2Credential);
 		g_cli::OAuth2RequestOptions options;
+		// TODO Make configurable
+		options.timeout_ms=120000;
 		options.email=email;
 		status=_flow->RefreshCredentialWithOptions(options,ret.get());
 		if(!status.ok())

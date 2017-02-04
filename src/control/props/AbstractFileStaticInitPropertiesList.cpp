@@ -124,7 +124,7 @@ public:
 			}
 			fs::fstream f(p);
 			if(!f)
-				G2F_EXCEPTION(G2FMESSAGE("Can not open file '%1'")).arg(p).throwIt(G2FErrorCodes::BadFileOperation);
+				G2F_EXCEPTION("Can not open file '%1'").arg(p).throwItSystem(ENOENT);
 			f.exceptions(std::fstream::failbit|std::fstream::badbit);
 			bool changed=updateConf(f,_upstream->getName(),val);
 			if(changed)

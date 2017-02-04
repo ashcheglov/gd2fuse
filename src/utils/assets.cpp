@@ -25,3 +25,13 @@ fs::path fromPathIt(const fs::path::const_iterator &begin, const fs::path::const
 		ret/=*it;
 	return ret;
 }
+
+bool operator==(const struct timespec &l, const struct timespec &r)
+{
+	return l.tv_sec==r.tv_sec && l.tv_nsec==r.tv_nsec;
+}
+
+bool operator!=(const struct timespec &l, const struct timespec &r)
+{
+	return !(l==r);
+}

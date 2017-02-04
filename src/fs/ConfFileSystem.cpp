@@ -32,12 +32,6 @@ public:
 	{
 		return Application::instance()->startTime();
 	}
-	virtual void setMD5(const MD5Signature &md5) override
-	{}
-	virtual MD5Signature getMD5() override
-	{
-		return MD5Signature();
-	}
 };
 
 
@@ -156,10 +150,11 @@ public:
 
 	// INode interface
 public:
-	virtual bool isFolder() override
+	virtual NodeType getNodeType() override
 	{
-		return false;
+		return NodeType::Binary;
 	}
+
 	virtual void fillAttr(struct stat &statbuf) override
 	{
 		memset(&statbuf,0,sizeof(statbuf));
@@ -264,9 +259,9 @@ public:
 
 	// INode interface
 public:
-	virtual bool isFolder() override
+	virtual NodeType getNodeType() override
 	{
-		return true;
+		return NodeType::Directory;
 	}
 	virtual void fillAttr(struct stat &statbuf) override
 	{
@@ -336,7 +331,7 @@ public:
 
 	// IFileSystem interface
 public:
-	virtual INotify *getNotifier() override
+	virtual INotifier *getNotifier() override
 	{
 		// TODO
 		return nullptr;
@@ -362,6 +357,21 @@ public:
 	virtual RemoveStatus removeNode(const fs::path &p) override
 	{
 		return RemoveStatus::RemoveForbidden;
+	}
+
+	virtual void renameNode(const fs::path &oldPath,const fs::path &newPath) override
+	{
+		G2F_EXCEPTION("It's impossible to rename entry in confFS").throwItSystem(EPERM);
+	}
+
+	virtual void replaceNode(const fs::path &pathToReplace,INode &onThis)
+	{
+		G2F_EXCEPTION("It's impossible to replace entry in confFS").throwItSystem(EPERM);
+	}
+
+	virtual void insertNode(const fs::path &parentPath,INode &that)
+	{
+		G2F_EXCEPTION("It's impossible to insert entry in confFS").throwItSystem(EPERM);
 	}
 
 private:

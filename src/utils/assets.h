@@ -3,6 +3,7 @@
 #include <string>
 #include <array>
 #include <boost/filesystem.hpp>
+#include <time.h>
 
 namespace fs=boost::filesystem;
 
@@ -28,3 +29,9 @@ namespace boost { namespace filesystem { namespace path_traits {
 */
 fs::path fromPathIt(const fs::path::const_iterator &begin,const fs::path::const_iterator &end);
 
+// timespec operate
+#define CLEAR_TIMESPEC(ts)  do{ts.tv_sec=0; ts.tv_nsec=0;}while(0)
+#define ISSET_TIMESPEC(ts)	(ts.tv_sec!=0)
+
+bool operator==(const struct timespec &l,const  struct timespec &r);
+bool operator!=(const struct timespec &l,const  struct timespec &r);

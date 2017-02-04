@@ -56,22 +56,16 @@ void gdt2timespec(const g_cli::DateTime &from, timespec &to)
 	to.tv_nsec=tv.tv_usec*1000;
 }
 
+g_cli::DateTime timespec2gdt(const timespec &from)
+{
+	return g_cli::DateTime(from.tv_sec);
+}
+
 void sp2md5sign(const g_api::StringPiece &str, MD5Signature &ret)
 {
 	if(str.size()!=32)
 		G2F_EXCEPTION("Can't recognize MD5 hash. Wrong length =%1, must be %2").arg(str.size()).arg(32).throwIt(G2FErrorCodes::MD5Error);
 	boost::algorithm::unhex(str.begin(),str.end(),ret.begin());
-}
-
-INode::FileType getFileType(const MimePair &mp)
-{
-	if(mp==FOLDER_MIME)
-		return INode::FileType::Directory;
-	if(mp==GOOGLE_DOC)
-		return INode::FileType::Exported;
-	if(mp==SHORTCUT)
-		return INode::FileType::Shortcut;
-	return INode::FileType::Binary;
 }
 
 std::string getMimeType(const MimePair &mp)
@@ -80,6 +74,32 @@ std::string getMimeType(const MimePair &mp)
 	ret+='/';
 	ret+=mp.second;
 	return ret;
+}
+
+
+INode::NodeType getFileType(const MimePair &mp)
+{
+	if(mp==FOLDER_MIME)
+		return INode::NodeType::Directory;
+	if(mp==GOOGLE_DOC)
+		return INode::NodeType::Exported;
+	if(mp==SHORTCUT)
+		return INode::NodeType::Shortcut;
+	return INode::NodeType::Binary;
+}
+
+std::string getFileMime(const INode::NodeType &type)
+{
+	switch(type)
+	{
+	case INode::NodeType::Directory:
+		return getMimeType(FOLDER_MIME);
+	case INode::NodeType::Exported:
+		return getMimeType(GOOGLE_DOC);
+	case INode::NodeType::Shortcut:
+		return getMimeType(SHORTCUT);
+	}
+	return std::string();
 }
 
 G2FError checkHttpResponse(const g_cli::HttpRequest* request)
@@ -298,10 +318,11 @@ protected:
 	{
 		uptr<g_drv::FilesResource_GetMethod> lm(_service->get_files().NewGetMethod(_authCred.get(),dest.getId()));
 		lm->set_fields(FILE_RESOURCE_FIELD);
+		lm->mutable_http_request()->mutable_options()->set_timeout_ms(_timeout);
 		uptr<g_drv::File> file(g_drv::File::New());
 		const g_utl::Status& s=lm->ExecuteAndParseResponse(file.get());
 		const G2FError &e=checkHttpResponse(lm->http_request());
-		if(e)
+		if(e.isError())
 			G2FExceptionBuilder("GoogleFS: fail to get node description").throwIt(e);
 
 		fillNode(*file,dest);
@@ -312,7 +333,7 @@ protected:
 	{
 		dest.setId(source.get_id().ToString());
 		dest.setName(source.get_title().ToString());
-		INode::FileType ft=getFileType(splitMime(source.get_mime_type().ToString()));
+		INode::NodeType ft=getFileType(splitMime(source.get_mime_type().ToString()));
 		dest.setFileType(ft);
 
 		timespec ts;
@@ -343,6 +364,7 @@ protected:
 		std::vector<std::string> ret;
 
 		uptr<g_drv::ChildrenResource_ListMethod> lm(_service->get_children().NewListMethod(_authCred.get(),parentId));
+		lm->mutable_http_request()->mutable_options()->set_timeout_ms(_timeout);
 		lm->set_fields("etag,items(id)");
 		uptr<g_drv::ChildList> data(g_drv::ChildList::New());
 		const g_utl::Status& s=lm->ExecuteAndParseResponse(data.get());
@@ -365,6 +387,7 @@ protected:
 		}
 		return ret;
 	}
+
 	virtual void cloudCreateMeta(Node &dest) override
 	{
 		Json::Value jStorage;
@@ -387,6 +410,7 @@ protected:
 																						 &f,
 																						 "",
 																						 nullptr));
+		lm->mutable_http_request()->mutable_options()->set_timeout_ms(_timeout);
 		lm->set_fields(FILE_RESOURCE_FIELD);
 		uptr<g_drv::File> file(g_drv::File::New());
 
@@ -402,33 +426,50 @@ protected:
 	{
 		uptr<g_drv::FilesResource_GetMethod> lm(_service->get_files().NewGetMethod(_authCred.get(),node.getId()));
 		lm->set_alt("media");
+		lm->mutable_http_request()->mutable_options()->set_timeout_ms(_timeout);
 		return std::make_unique<ContentReader>(std::move(lm));
 	}
 
-	virtual void cloudUpdate(Node &node,INodePatch* patchMeta,const std::string &mediaType,ContentManager::IReader *content) override
+	virtual void cloudUpdate(Node &node,int patchFields,const std::string &mediaType,ContentManager::IReader *content) override
 	{
-		assert(patchMeta || content);
+		assert(patchFields!=0 || content);
 
 		Json::Value jStorage;
+		Json::Value jRefStorage;
+		Json::Value jParentsStorage;
 		g_drv::File f(&jStorage);
 		const g_drv::File* metadata=nullptr;
-		if(patchMeta)
+
+		if(patchFields & Node::Field::Parent)
 		{
-			std::string data;
-			if(patchMeta->is(INodePatch::MimeType))
-			{
-				patchMeta->getMimeType(data);
-				f.set_mime_type(data);
-				metadata=&f;
-			}
-			if(patchMeta->is(INodePatch::Name))
-			{
-				fs::path p;
-				patchMeta->getName(p);
-				f.set_title(p.string());
-				metadata=&f;
-			}
+			g_drv::ParentReference pref(&jRefStorage);
+			pref.set_id(node.getParent()->getId());
+
+			g_cli::JsonCppArray<g_drv::ParentReference> parents(&jParentsStorage);
+			parents.set(0,pref);
+			(*f.MutableStorage())["parents"]=*parents.MutableStorage();
 		}
+
+		if(patchFields & Node::Field::Name)
+		{
+			f.set_title(node.getName().string());
+		}
+
+		if(patchFields & Node::Field::Time)
+		{
+			f.set_modified_date(timespec2gdt(node.getTime(TimeAttrib::ModificationTime)));
+			f.set_created_date(timespec2gdt(node.getTime(TimeAttrib::ChangeTime)));
+			f.set_last_viewed_by_me_date(timespec2gdt(node.getTime(TimeAttrib::AccessTime)));
+		}
+
+		if(patchFields & Node::Field::Content)
+		{
+			f.set_mime_type(getFileMime(node.getNodeType()));
+		}
+
+
+		if(patchFields)
+			metadata=&f;
 
 		uptr<GoogleReader> dataReader;
 		if(content)
@@ -440,6 +481,7 @@ protected:
 																						 metadata,
 																						 mediaType,
 																						 dataReader.release()));
+		lm->mutable_http_request()->mutable_options()->set_timeout_ms(_timeout);
 		lm->Execute();
 		const G2FError &e=checkHttpResponse(lm->mutable_http_request());
 		if(e.isError())
@@ -452,6 +494,7 @@ protected:
 		uptr<g_drv::FilesResource_DeleteMethod> m(_service->get_files().NewDeleteMethod(
 													  _authCred.get(),
 													  node.getId()));
+		m->mutable_http_request()->mutable_options()->set_timeout_ms(_timeout);
 		m->Execute();
 		const G2FError &e=checkHttpResponse(m->mutable_http_request());
 		if(e.isError())
@@ -461,6 +504,7 @@ protected:
 private:
 	sptr<g_drv::DriveService> _service;
 	OAuth2CredentialPtr _authCred;
+	int64_t _timeout=60000;
 };
 G2F_DECLARE_PTR(GoogleFileSystem);
 
@@ -937,6 +981,8 @@ public:
 		sptr<g_cli::HttpTransportLayerConfig> ret(new g_cli::HttpTransportLayerConfig);
 		ret->ResetDefaultTransportFactory(new g_cli::CurlHttpTransportFactory(ret.get()));
 		g_cli::HttpTransportOptions* opts=ret->mutable_default_transport_options();
+		// TODO Configurable
+		opts->set_connect_timeout_ms(50000);
 		for(std::string p : props)
 		{
 			boost::to_lower(p);

@@ -46,3 +46,9 @@ void Cache::slotNodeRemoved(INode &node)
 		_nodes.erase(itNode);
 	}
 }
+
+void Cache::slotNodeChanged(INode &node, int)
+{
+	// I don't know enum Node::Fields here...
+	slotNodeRemoved(node);
+}

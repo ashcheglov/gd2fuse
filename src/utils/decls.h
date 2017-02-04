@@ -27,6 +27,3 @@ enum TimeAttrib
 	ChangeTime
 };
 
-// timespec operate
-#define CLEAR_TIMESPEC(ts)  do{ts.tv_sec=0; ts.tv_nsec=0;}while(0)
-#define ISSET_TIMESPEC(ts)	(ts.tv_sec!=0)

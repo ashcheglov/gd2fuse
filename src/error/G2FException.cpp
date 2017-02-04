@@ -204,6 +204,11 @@ void G2FExceptionBuilder::throwItSystem(int errNo)
 	BOOST_THROW_EXCEPTION(getIt(G2FError(errNo,err::system_category())));
 }
 
+void G2FExceptionBuilder::throwItGeneric(boost::system::errc::errc_t code)
+{
+	BOOST_THROW_EXCEPTION(getIt(G2FError(code,err::generic_category())));
+}
+
 void G2FExceptionBuilder::throwIt(G2FError code)
 {
 	BOOST_THROW_EXCEPTION(getIt(code));

@@ -12,7 +12,7 @@ class INode
 {
 
 public:
-	enum class FileType
+	enum class NodeType
 	{
 		Directory,
 		Exported,
@@ -21,7 +21,12 @@ public:
 	};
 
 	virtual void setId(const std::string &id) =0;
-	virtual bool isFolder() =0;
+	virtual bool isFolder()
+	{
+		return getNodeType()==NodeType::Directory;
+	}
+
+	virtual NodeType getNodeType() =0;
 	virtual void fillAttr(struct stat& statbuf) =0;
 	virtual std::string getId() =0;
 	virtual void setName(const fs::path &name) =0;
@@ -30,8 +35,6 @@ public:
 	virtual size_t getSize() =0;
 	virtual void setTime(TimeAttrib what, timespec value) =0;
 	virtual timespec getTime(TimeAttrib what) =0;
-	virtual void setMD5(const MD5Signature &md5) =0;
-	virtual MD5Signature getMD5() =0;
 	virtual IDirectoryIteratorPtr getDirectoryIterator() =0;
 	virtual IContentHandle* openContent(int flags) =0;
 	virtual posix_error_code truncate(off_t newSize) =0;

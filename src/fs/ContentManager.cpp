@@ -63,13 +63,13 @@ bool ContentManager::is(const std::string &id)
 	return fs::exists(fileName);
 }
 
-uint64_t ContentManager::openFile(const std::string &id,int flags)
+int64_t ContentManager::openFile(const std::string &id,int flags)
 {
 	fs::path fileName=_workDir/id2fileName(id);
-	if(!fs::exists(fileName))
-		G2FExceptionBuilder("Media manager: attempt to open non existent file '%1'").arg(fileName).throwItSystem(ENOENT);
+	//if(!(flags&O_CREAT) && !fs::exists(fileName))
+	//	G2FExceptionBuilder("Media manager: attempt to open non existent file '%1'").arg(fileName).throwItSystem(ENOENT);
 
-	int fileDesc=open(fileName.c_str(),flags);
+	int fileDesc=open(fileName.c_str(),flags,S_IRUSR|S_IWUSR);
 	if(fileDesc==-1)
 	{
 		int err=errno;
@@ -78,12 +78,12 @@ uint64_t ContentManager::openFile(const std::string &id,int flags)
 	return fileDesc;
 }
 
-void ContentManager::closeFile(uint64_t fd)
+void ContentManager::closeFile(int64_t fd)
 {
 	close(fd);
 }
 
-int ContentManager::readContent(uint64_t fd,char *buf, size_t len, off_t offset)
+int ContentManager::readContent(int64_t fd, char *buf, size_t len, off_t offset)
 {
 	//return pread(fd,buf,len,offset);
 	ssize_t ret=0,readed=0;
@@ -103,7 +103,7 @@ int ContentManager::readContent(uint64_t fd,char *buf, size_t len, off_t offset)
 	return ret;
 }
 
-int ContentManager::writeContent(uint64_t fd,const char *buf, size_t len, off_t offset)
+int ContentManager::writeContent(int64_t fd, const char *buf, size_t len, off_t offset)
 {
 	int ret=pwrite(fd,buf,len,offset);
 	if(ret<0)
@@ -131,6 +131,8 @@ void ContentManager::truncateFile(const std::string &id, size_t size, off_t newS
 void ContentManager::createFile(const std::string &id,IReader* content)
 {
 	fs::path fileName=_workDir/id2fileName(id);
+	if(!fs::exists(fileName.parent_path()))
+		fs::create_directories(fileName.parent_path());
 
 	AutocloseableHandler fd=creat(fileName.c_str(),S_IRUSR|S_IWUSR);
 	if(fd<0)
@@ -214,7 +216,7 @@ ContentManager::IReaderPtr ContentManager::readContent(const std::string &id)
 	if(!f)
 	{
 		int err=errno;
-		G2FExceptionBuilder("Media manager: can not open file '%1'").arg(fileName).throwItSystem(err);
+		G2FExceptionBuilder("Media manager: can not open file '%1' for reading").arg(fileName).throwItSystem(err);
 	}
 	return std::make_shared<ContentReader>(std::move(f));
 }

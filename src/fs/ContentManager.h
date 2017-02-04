@@ -20,10 +20,10 @@ public:
 	ContentManager(const fs::path &workDir);
 
 	bool is(const std::string &id);
-	uint64_t openFile(const std::string &id, int flags);
-	void closeFile(uint64_t fd);
-	int readContent(uint64_t fd,char *buf, size_t len, off_t offset);
-	int writeContent(uint64_t fd,const char *buf, size_t len, off_t offset);
+	int64_t openFile(const std::string &id, int flags);
+	void closeFile(int64_t fd);
+	int readContent(int64_t fd,char *buf, size_t len, off_t offset);
+	int writeContent(int64_t fd,const char *buf, size_t len, off_t offset);
 	void truncateFile(const std::string &id, size_t size, off_t newSize);
 	void createFile(const std::string &id,IReader* content);
 	bool deleteFile(const std::string &id);

@@ -123,7 +123,7 @@ int g2f_releasedir (const char *path, struct fuse_file_info *fi)
 	int ret=0;
 	G2F_LOG_SCOPE();
 	G2F_LOG("path=" << path);
-	G2F_LOG("ret=" << ret);
+	G2F_LOG("errno=" << ret);
 	fi->fh=0;
 	return -ret;
 }
@@ -149,21 +149,15 @@ int g2f_open (const char *path, struct fuse_file_info *fi)
 {
 	G2F_LOG_SCOPE();
 	G2F_LOG("path=" << path << ", flags=" << fi->flags);
-	INode *n=G2F_DATA->getINode(path);
-	if(!n)
-		return -ENOENT;
-	G2F_LOG("node id=" << n->getId() << ", name=" << n->getName());
-	if(n->isFolder())
-		return -EISDIR;
-	fi->nonseekable=0;
-	IContentHandle *chn=n->openContent(fi->flags);
-	fi->direct_io=chn->useDirectIO()?1:0;
-	assert(chn!=0);
-	int err=chn->getError();
-	if(err)
-		delete chn;
-	else
+	IContentHandle *chn=nullptr;
+	int err=G2F_DATA->openContent(path,fi->flags,chn);
+	if(!err)
+	{
+		fi->nonseekable=0;
+		fi->direct_io=chn->useDirectIO()?1:0;
 		fi->fh=CONTENTHANDLEPTR_2_FH(chn);
+	}
+
 	G2F_LOG("errno=" << err << ", fd=" << fi->fh);
 	return -err;
 }
@@ -184,9 +178,10 @@ int g2f_read (const char *path, char *buf, size_t size, off_t offset, struct fus
 	G2F_LOG_SCOPE();
 	G2F_LOG("path=" << path << ", fd=" << fi->fh << ", size=" << size << ", offset=" << offset);
 
+	//int ret=G2F_DATA->readContent(chn,buf,size,offset);
 	IContentHandle *chn=FH_2_CONTENTHANDLEPTR(fi->fh);
 	int ret=chn->read(buf,size,offset);
-	G2F_LOG("ret=" << ret);
+	G2F_LOG("errno=" << ret);
 	return ret;
 }
 
@@ -234,7 +229,7 @@ int g2f_fgetattr (const char *path, struct stat *statbuf, struct fuse_file_info 
 
 	IContentHandle *chn=FH_2_CONTENTHANDLEPTR(fi->fh);
 	chn->fillAttr(*statbuf);
-	G2F_LOG("Attribute filled");
+	G2F_LOG("statbuf: st_size=" << statbuf->st_size << ", st_mode=" << statbuf->st_mode);
 
 	return 0;
 }
@@ -252,7 +247,7 @@ int g2f_truncate (const char *path, off_t newSize)
 		return -EISDIR;
 	//EPERM
 	int ret=n->truncate(newSize);
-	G2F_LOG("ret=" << ret);
+	G2F_LOG("errno=" << ret);
 	return -ret;
 }
 
@@ -273,18 +268,17 @@ int g2f_truncate (const char *path, off_t newSize)
 int g2f_create (const char *path, mode_t mode, struct fuse_file_info *fi)
 {
 	G2F_LOG_SCOPE();
-	G2F_LOG("path=" << path << ", flags=" << fi->flags);
+	G2F_LOG("path=" << path << ", mode= " << mode << ", flags=" << fi->flags);
 
 	// NOTE Implement transactions
 	INode *f=nullptr;
-	posix_error_code err=G2F_DATA->createFile(path,fi->flags,f);
-
+	posix_error_code err=G2F_DATA->createFile(path,f);
 
 	if(!err)
 	{
 		G2F_LOG("node id=" << f->getId() << ", name=" << f->getName());
 
-		IContentHandle *chn=f->openContent(fi->flags);
+		IContentHandle *chn=f->openContent(O_CREAT|O_WRONLY|O_TRUNC);
 		fi->nonseekable=0;
 		fi->direct_io=chn->useDirectIO()?1:0;
 		assert(chn!=0);
@@ -337,7 +331,7 @@ int g2f_write (const char *path, const char *buf, size_t size, off_t offset,
 	G2F_LOG("path=" << path << ", fd=" << fi->fh << ", bufsize=" << size << ", offset=" << offset);
 	IContentHandle *chn=FH_2_CONTENTHANDLEPTR(fi->fh);
 	int ret=chn->write(buf,size,offset);
-	G2F_LOG("ret=" << ret);
+	G2F_LOG("errno=" << ret);
 	return ret;
 }
 
@@ -380,90 +374,6 @@ int g2f_rmdir (const char *path)
 	return -err;
 }
 
-
-/** Read the target of a symbolic link
-  *
-  * The buffer should be filled with a null terminated string.  The
-  * buffer size argument includes the space for the terminating
-  * null character.	If the linkname is too long to fit in the
-  * buffer, it should be truncated.	The return value should be 0
-  * for success.
-  */
-int g2f_readlink (const char *path, char *link, size_t size)
-{
-	G2F_LOG_SCOPE();
-	G2F_LOG("path=" << path << ", UNIMPLEMENTED");
-	return -ENOSYS;
-}
-
-/** Create a file node
-  *
-  * This is called for creation of all non-directory, non-symlink
-  * nodes.  If the filesystem defines a create() method, then for
-  * regular files that will be called instead.
-  */
-int g2f_mknod(const char *path, mode_t mode, dev_t dev)
-{
-	G2F_LOG_SCOPE();
-	G2F_LOG("path=" << path << ", UNIMPLEMENTED");
-	return -ENOSYS;
-}
-
-/** Create a symbolic link */
-int g2f_symlink (const char *path, const char *link)
-{
-	G2F_LOG_SCOPE();
-	G2F_LOG("path=" << path << ", UNIMPLEMENTED");
-	return -ENOSYS;
-}
-
-/** Rename a file */
-int g2f_rename (const char *path, const char *newPath)
-{
-	G2F_LOG_SCOPE();
-	G2F_LOG("path=" << path << ", UNIMPLEMENTED");
-	return -ENOSYS;
-}
-
-/** Create a hard link to a file */
-int g2f_link (const char *path, const char *newPath)
-{
-	G2F_LOG_SCOPE();
-	G2F_LOG("path=" << path << ", UNIMPLEMENTED");
-	return -ENOSYS;
-}
-
-/** Change the permission bits of a file */
-int g2f_chmod (const char *path, mode_t mode)
-{
-	G2F_LOG_SCOPE();
-	G2F_LOG("path=" << path << ", UNIMPLEMENTED");
-	return -ENOSYS;
-}
-
-/** Change the owner and group of a file */
-int g2f_chown (const char *path, uid_t uid, gid_t gid)
-{
-	G2F_LOG_SCOPE();
-	G2F_LOG("path=" << path << ", UNIMPLEMENTED");
-	return -ENOSYS;
-}
-
-/** Get file system statistics
-  *
-  * The 'f_frsize', 'f_favail', 'f_fsid' and 'f_flag' fields are ignored
-  *
-  * Replaced 'struct statfs' parameter with 'struct statvfs' in
-  * version 2.5
-  */
-int g2f_statfs (const char *path, struct statvfs *statv)
-{
-	// TODO g2f_statfs
-	G2F_LOG_SCOPE();
-	G2F_LOG("path=" << path << ", UNIMPLEMENTED");
-	return -ENOSYS;
-}
-
 /** Possibly flush cached data
   *
   * BIG NOTE: This is not equivalent to fsync().  It's not a
@@ -492,9 +402,113 @@ int g2f_flush (const char *path, struct fuse_file_info *fi)
 	G2F_LOG_SCOPE();
 	G2F_LOG("path=" << path << ", fd=" << fi->fh);
 
-	int ret=FH_2_CONTENTHANDLEPTR(fi->fh)->flush();
-	G2F_LOG("ret=" << ret);
-	return -ret;
+	int err=FH_2_CONTENTHANDLEPTR(fi->fh)->flush();
+	G2F_LOG("errno=" << err);
+	return -err;
+}
+
+/** Rename a file */
+int g2f_rename (const char *path, const char *newPath)
+{
+	G2F_LOG_SCOPE();
+	G2F_LOG("path=" << path << ", newPath=" << newPath);
+	posix_error_code err=G2F_DATA->rename(path,newPath);
+	G2F_LOG("errno=" << err);
+	return -err;
+}
+
+/**
+  * Change the access and modification times of a file with
+  * nanosecond resolution
+  *
+  * This supersedes the old utime() interface.  New applications
+  * should use this.
+  *
+  * See the utimensat(2) man page for details.
+  *
+  * Introduced in version 2.6
+  */
+int g2f_utimens (const char *path, const struct timespec tv[2])
+{
+	// TODO
+	G2F_LOG_SCOPE();
+	G2F_LOG("path=" << path << ", UNIMPLEMENTED");
+	return -ENOSYS;
+}
+
+/** Read the target of a symbolic link
+  *
+  * The buffer should be filled with a null terminated string.  The
+  * buffer size argument includes the space for the terminating
+  * null character.	If the linkname is too long to fit in the
+  * buffer, it should be truncated.	The return value should be 0
+  * for success.
+  */
+int g2f_readlink (const char *path, char *link, size_t size)
+{
+	G2F_LOG_SCOPE();
+	G2F_LOG("path=" << path << ", link=" << link << ", size=" << size << ", UNIMPLEMENTED");
+	return -ENOSYS;
+}
+
+/** Create a file node
+  *
+  * This is called for creation of all non-directory, non-symlink
+  * nodes.  If the filesystem defines a create() method, then for
+  * regular files that will be called instead.
+  */
+int g2f_mknod(const char *path, mode_t mode, dev_t dev)
+{
+	G2F_LOG_SCOPE();
+	G2F_LOG("path=" << path << ", mode=" << mode << ", dev=" << dev <<  ", UNIMPLEMENTED");
+	return -ENOSYS;
+}
+
+/** Create a symbolic link */
+int g2f_symlink (const char *path, const char *link)
+{
+	G2F_LOG_SCOPE();
+	G2F_LOG("path=" << path <<  ", link=" << link << ", UNIMPLEMENTED");
+	return -ENOSYS;
+}
+
+/** Create a hard link to a file */
+int g2f_link (const char *path, const char *newPath)
+{
+	G2F_LOG_SCOPE();
+	G2F_LOG("path=" << path << ", newPath=" << newPath << ", UNIMPLEMENTED");
+	return -ENOSYS;
+}
+
+/** Change the permission bits of a file */
+int g2f_chmod (const char *path, mode_t mode)
+{
+	G2F_LOG_SCOPE();
+	G2F_LOG("path=" << path << ", mode=" << mode << ", UNIMPLEMENTED");
+	return -ENOSYS;
+}
+
+/** Change the owner and group of a file */
+int g2f_chown (const char *path, uid_t uid, gid_t gid)
+{
+	G2F_LOG_SCOPE();
+	G2F_LOG("path=" << path << ", uid=" << uid << ", gid=" << gid << ", UNIMPLEMENTED");
+	return -ENOSYS;
+}
+
+/** Get file system statistics
+  *
+  * The 'f_frsize', 'f_favail', 'f_fsid' and 'f_flag' fields are ignored
+  *
+  * Replaced 'struct statfs' parameter with 'struct statvfs' in
+  * version 2.5
+  */
+int g2f_statfs (const char *path, struct statvfs *statv)
+{
+	// TODO g2f_statfs
+	G2F_LOG_SCOPE();
+	G2F_LOG("path=" << path << ", UNIMPLEMENTED");
+	return -ENOSYS;
 }
 
 /** Synchronize file contents
@@ -507,7 +521,7 @@ int g2f_flush (const char *path, struct fuse_file_info *fi)
 int g2f_fsync (const char *path, int datasync, struct fuse_file_info *fi)
 {
 	G2F_LOG_SCOPE();
-	G2F_LOG("path=" << path << ", UNIMPLEMENTED");
+	G2F_LOG("path=" << path << ", fh=" << fi->fh << ", datasync=" << datasync << ", UNIMPLEMENTED");
 	return -ENOSYS;
 }
 
@@ -521,7 +535,7 @@ int g2f_fsync (const char *path, int datasync, struct fuse_file_info *fi)
 int g2f_fsyncdir (const char *path, int datasync, struct fuse_file_info *fi)
 {
 	G2F_LOG_SCOPE();
-	G2F_LOG("path=" << path << ", UNIMPLEMENTED");
+	G2F_LOG("path=" << path << ", fh=" << fi->fh << ", datasync=" << datasync << ", UNIMPLEMENTED");
 	return -ENOSYS;
 }
 
@@ -537,7 +551,9 @@ int g2f_fsyncdir (const char *path, int datasync, struct fuse_file_info *fi)
   */
 void *g2f_init (struct fuse_conn_info *conn)
 {
+	G2F_LOG_SCOPE();
 	conn->async_read=0;
+	G2F_LOG("called");
 	return G2F_DATA;
 }
 
@@ -550,6 +566,8 @@ void *g2f_init (struct fuse_conn_info *conn)
   */
 void g2f_destroy (void *userData)
 {
+	G2F_LOG_SCOPE();
+	G2F_LOG("called");
 }
 
 
@@ -565,10 +583,10 @@ void g2f_destroy (void *userData)
   *
   * Introduced in version 2.5
   */
-int g2f_ftruncate (const char *path, off_t lenfth, struct fuse_file_info *fi)
+int g2f_ftruncate (const char *path, off_t length, struct fuse_file_info *fi)
 {
 	G2F_LOG_SCOPE();
-	G2F_LOG("path=" << path << ", UNIMPLEMENTED");
+	G2F_LOG("path=" << path << ", fh=" << fi->fh << ", length=" << length << ", UNIMPLEMENTED");
 	return -ENOSYS;
 }
 
@@ -608,25 +626,7 @@ int g2f_lock (const char *path, struct fuse_file_info *fi, int cmd,
 		  struct flock *lockInfo)
 {
 	G2F_LOG_SCOPE();
-	G2F_LOG("path=" << path << ", UNIMPLEMENTED");
-	return -ENOSYS;
-}
-
-/**
-  * Change the access and modification times of a file with
-  * nanosecond resolution
-  *
-  * This supersedes the old utime() interface.  New applications
-  * should use this.
-  *
-  * See the utimensat(2) man page for details.
-  *
-  * Introduced in version 2.6
-  */
-int g2f_utimens (const char *path, const struct timespec tv[2])
-{
-	G2F_LOG_SCOPE();
-	G2F_LOG("path=" << path << ", UNIMPLEMENTED");
+	G2F_LOG("path=" << path << ", fh=" << fi->fh << ", cmd=" << cmd << ", UNIMPLEMENTED");
 	return -ENOSYS;
 }
 
@@ -641,7 +641,7 @@ int g2f_utimens (const char *path, const struct timespec tv[2])
 int g2f_bmap (const char *path, size_t blocksize, uint64_t *idx)
 {
 	G2F_LOG_SCOPE();
-	G2F_LOG("path=" << path << ", UNIMPLEMENTED");
+	G2F_LOG("path=" << path << ", blocksize=" << blocksize << ", UNIMPLEMENTED");
 	return -ENOSYS;
 }
 
@@ -657,11 +657,10 @@ int g2f_bmap (const char *path, size_t blocksize, uint64_t *idx)
   *
   * Introduced in version 2.8
   */
-int g2f_ioctl (const char *path, int cmd, void *arg,
-		  struct fuse_file_info *, unsigned int flags, void *data)
+int g2f_ioctl (const char *path, int cmd, void *arg, struct fuse_file_info *fi, unsigned int flags, void *data)
 {
 	G2F_LOG_SCOPE();
-	G2F_LOG("path=" << path << ", UNIMPLEMENTED");
+	G2F_LOG("path=" << path << ", cmd=" << cmd << ", UNIMPLEMENTED");
 	return -ENOSYS;
 }
 
@@ -800,29 +799,29 @@ void g2f_init_ops(fuse_operations* ops)
 	ops->unlink = g2f_unlink;
 	ops->mkdir = g2f_mkdir;
 	ops->rmdir = g2f_rmdir;
+	ops->flush = g2f_flush;
+	ops->rename = g2f_rename;
+	ops->utimens = g2f_utimens;
 
 	ops->readlink = g2f_readlink;
 	//ops->getdir = NULL;
 	ops->mknod = g2f_mknod;
 	ops->symlink = g2f_symlink;
-	ops->rename = g2f_rename;
 	ops->link = g2f_link;
 	ops->chmod = g2f_chmod;
 	ops->chown = g2f_chown;
 	ops->statfs = g2f_statfs;
-	ops->flush = g2f_flush;
 	ops->fsync = g2f_fsync;
 	ops->fsyncdir = g2f_fsyncdir;
 	ops->init = g2f_init;
 	ops->destroy = g2f_destroy;
 	ops->ftruncate = g2f_ftruncate;
 	//ops->lock = g2f_lock;
-	ops->utimens = g2f_utimens;
 	ops->bmap = g2f_bmap;
 	ops->ioctl = g2f_ioctl;
 	ops->poll = g2f_poll;
 	//ops->write_buf = g2f_write_buf;
 	//ops->read_buf = g2f_read_buf;
-	ops->flock = g2f_flock;
-	ops->fallocate = g2f_fallocate;
+	//ops->flock = g2f_flock;
+	//ops->fallocate = g2f_fallocate;
 }

@@ -19,6 +19,7 @@
 class AbstractFileSystem : public IFileSystem
 {
 public:
+
 	/**
 	 * @brief The Node class
 	 *
@@ -26,6 +27,15 @@ public:
 	class Node : public INode
 	{
 	public:
+		enum Field
+		{
+			Name	= 1 << 0,
+			Parent	= 1 << 1,
+			Id		= 1 << 2,
+			Time	= 1 << 3,
+			Content = 1 << 4
+		};
+
 		friend class AbstractFileSystem;
 
 		typedef boost::ptr_list<Node> NodeList;
@@ -36,7 +46,7 @@ public:
 		// Simple model: regular tree. Today we don't support links
 		Node(AbstractFileSystem *tree,Node *parent);
 		// INode interface
-		virtual bool isFolder() override;
+		virtual NodeType getNodeType() override;
 		virtual void fillAttr(struct stat &statbuf) override;
 		virtual std::string getId() override;
 		virtual void setId(const std::string &id) override;
@@ -46,12 +56,13 @@ public:
 		virtual size_t getSize() override;
 		virtual void setTime(TimeAttrib what, timespec value) override;
 		virtual timespec getTime(TimeAttrib what) override;
-		virtual MD5Signature getMD5() override;
-		virtual void setMD5(const MD5Signature &md5) override;
 		virtual IDirectoryIteratorPtr getDirectoryIterator() override;
 		virtual IContentHandle *openContent(int flags) override;
 		virtual posix_error_code truncate(off_t newSize) override;
-		void setFileType(FileType type);
+
+		MD5Signature getMD5();
+		void setMD5(const MD5Signature &md5);
+		void setFileType(NodeType type);
 		Node *getParent();
 
 		// Remove all (what==null) or particular (what!=null) inferrior nodes
@@ -61,6 +72,10 @@ public:
 		Node *find(fs::path::iterator &it,const fs::path::iterator &end);
 		void clearTime(TimeAttrib what);
 		void addNext(Node *value);
+		bool importNreplace(INode &value, const fs::path &newName=fs::path(), Node *toReplace=nullptr);
+		int patch(Node &dataSource, int patchField);
+		bool detachNode(Node *node);
+		void attachNode(Node *node);
 
 		inline iterator begin() { return _next.begin(); }
 		inline const_iterator begin() const { return _next.begin(); }
@@ -76,7 +91,7 @@ public:
 		std::string _id;
 		fs::path _name;
 		size_t _size = 0;
-		FileType _fileType=FileType::Binary;
+		NodeType _fileType=NodeType::Binary;
 		MD5Signature _md5;
 		Node *_parent=0;
 
@@ -85,41 +100,29 @@ public:
 		timespec _lastChange;        // time of last status change
 	};
 
-	class INodePatch
-	{
-	public:
-		enum Field
-		{
-			MimeType,
-			Id,
-			Name
-		};
-
-		virtual bool is(Field field) =0;
-
-		virtual bool getMimeType(std::string &res) =0;
-		virtual bool getId(std::string &res) =0;
-		virtual bool getName(fs::path &res) =0;
-	};
-
 public:
 	AbstractFileSystem(const ContentManagerPtr &cm);
 	~AbstractFileSystem();
 
 	void fillDir(Node *dir);
 
-	virtual INotify *getNotifier() override;
+	virtual INotifier *getNotifier() override;
 	virtual Node *getRoot() override;
 	virtual INode *get(const fs::path &path) override;
 	virtual CreateResult createNode(const fs::path &path,bool isDirectory) override;
 	virtual RemoveStatus removeNode(const fs::path &path) override;
+	virtual void renameNode(const boost::filesystem::path &oldPath, const boost::filesystem::path &newPath) override;
+	virtual void replaceNode(const fs::path &pathToReplace,INode &onThis);
+	virtual void insertNode(const fs::path &parentPath,INode &that);
+
+	Node *getNode(const fs::path &path,bool throwIfMissed);
 
 protected:
 	virtual void cloudFetchMeta(Node &dest) =0;
 	virtual std::vector<std::string> cloudFetchChildrenList(const std::string &parentId) =0;
 	virtual void cloudCreateMeta(Node &dest) =0;
 	virtual ContentManager::IReaderUPtr cloudReadMedia(Node &node) =0;
-	virtual void cloudUpdate(Node &node,INodePatch* patchMeta,const std::string &mediaType,ContentManager::IReader *content) =0;
+	virtual void cloudUpdate(Node &node,int patchFields,const std::string &mediaType="",ContentManager::IReader *content=nullptr) =0;
 	virtual void cloudRemove(Node &node) =0;
 
 	void updateNodeContent(INode &n);

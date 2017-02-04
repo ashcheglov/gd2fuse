@@ -47,6 +47,7 @@ public:
 
 	void throwIt(G2FError code);
 	void throwItSystem(int errNo);
+	void throwItGeneric(err::errc::errc_t code);
 	G2FException getIt(G2FError code);
 
 

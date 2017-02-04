@@ -4,6 +4,8 @@
 #include "control/Application.h"
 #include "fs/AbstractFileSystem.h"
 #include "IContentHandle.h"
+#include <fcntl.h>
+#include "utils/assets.h"
 
 namespace
 {
@@ -17,7 +19,7 @@ namespace
  * @brief The AbstractFileSystem::Notifier class
  *
  ****************************************************************/
-class AbstractFileSystem::Notifier : public IFileSystem::INotify
+class AbstractFileSystem::Notifier : public IFileSystem::INotifier
 {
 public:
 	Notifier(AbstractFileSystem *parent)
@@ -26,7 +28,7 @@ public:
 
 	// INotify interface
 public:
-	virtual bs2::connection subscribeToContentChange(const OnContentChange::slot_type &sub) override
+	virtual bs2::connection subscribeToFileContentChange(const OnFileContentChange::slot_type &sub) override
 	{
 		return onContentChange.connect(sub);
 	}
@@ -36,8 +38,26 @@ public:
 		return onNodeRemove.connect(sub);
 	}
 
-	IFileSystem::INotify::OnContentChange	onContentChange;
-	IFileSystem::INotify::OnNodeRemove		onNodeRemove;
+	virtual bs2::connection subscribeToNodeChange(const OnNodeChange::slot_type &sub) override
+	{
+		return onNodeChange.connect(sub);
+	}
+
+	virtual bs2::connection subscribeToDirectoryChange(const OnDirectoryChange::slot_type &sub) override
+	{
+		return onDirChange.connect(sub);
+	}
+
+	virtual bs2::connection subscribeToNodeCreate(const OnNodeCreate::slot_type &sub) override
+	{
+		return onNodeCreate.connect(sub);
+	}
+
+	IFileSystem::INotifier::OnFileContentChange		onContentChange;
+	IFileSystem::INotifier::OnNodeChange			onNodeChange;
+	IFileSystem::INotifier::OnNodeRemove			onNodeRemove;
+	IFileSystem::INotifier::OnNodeCreate			onNodeCreate;
+	IFileSystem::INotifier::OnDirectoryChange		onDirChange;
 
 private:
 	AbstractFileSystem *_parent=nullptr;
@@ -95,14 +115,22 @@ private:
 class AbstractFileSystem::Node::FileHandle : public IContentHandle
 {
 public:
-	FileHandle(AbstractFileSystem::Node *node,uint64_t fd)
+	FileHandle(AbstractFileSystem::Node *node,int64_t fd,bool changed)
 		: _n(node),
-		  _fd(fd)
+		  _fd(fd),
+		  _changed(changed)
 	{}
-	FileHandle(int error,AbstractFileSystem::Node *node)
-		: _n(node),
-		  _error(error)
-	{}
+	~FileHandle()
+	{
+		try
+		{
+			if(_fd!=-1)
+				_n->_tree->_cm->closeFile(_fd);
+		}
+		catch(...)
+		{}
+	}
+
 	// IContentHandle interface
 	virtual AbstractFileSystem::Node *getMeta() override
 	{
@@ -136,12 +164,13 @@ public:
 	{
 		_error=0;
 		_n->_tree->_cm->closeFile(_fd);
+		_fd=-1;
 		if(_changed)
 			_n->_tree->_notifier->onContentChange(*_n);
 	}
 private:
 	AbstractFileSystem::Node *_n=nullptr;
-	uint64_t _fd=-1;
+	int64_t _fd=-1;
 	posix_error_code _error=0;
 	bool _changed=false;
 
@@ -168,9 +197,9 @@ AbstractFileSystem::Node::Node(AbstractFileSystem *tree,Node *parent)
 {}
 
 // INode interface
-bool AbstractFileSystem::Node::isFolder()
+INode::NodeType AbstractFileSystem::Node::getNodeType()
 {
-	return _fileType==FileType::Directory;
+	return _fileType;
 }
 
 void AbstractFileSystem::Node::fillAttr(struct stat &statbuf)
@@ -260,16 +289,6 @@ timespec AbstractFileSystem::Node::getTime(TimeAttrib what)
 	return _lastAccess;
 }
 
-MD5Signature AbstractFileSystem::Node::getMD5()
-{
-	return _md5;
-}
-
-void AbstractFileSystem::Node::setMD5(const MD5Signature &md5)
-{
-	_md5=md5;
-}
-
 IDirectoryIteratorPtr AbstractFileSystem::Node::getDirectoryIterator()
 {
 	if(this->isFolder())
@@ -285,16 +304,28 @@ IDirectoryIteratorPtr AbstractFileSystem::Node::getDirectoryIterator()
 
 IContentHandle *AbstractFileSystem::Node::openContent(int flags)
 {
-	uint64_t fd=0;
-
+	bool willBeCreated=false;
 	ContentManager &cm=*_tree->_cm;
-	if(!cm.is(_id))
-		cm.createFile(_id,_tree->cloudReadMedia(*this).get());
+	bool exists=cm.is(_id);
+	if(flags&O_CREAT)
+	{
+		if(!exists)
+			willBeCreated=true;
+		else
+		if(flags&O_EXCL)
+			willBeCreated=cm.deleteFile(_id);
+	}
 
-	fd=cm.openFile(_id,flags);
+	if(!willBeCreated)
+	{
+		if(!exists)
+			cm.createFile(_id,_tree->cloudReadMedia(*this).get());
+	}
+
+	int64_t fd=cm.openFile(_id,flags);
 	clock_gettime(CLOCK_REALTIME,&_lastAccess);
 
-	return new FileHandle(this,fd);
+	return new FileHandle(this,fd,willBeCreated);
 }
 
 posix_error_code AbstractFileSystem::Node::truncate(off_t newSize)
@@ -308,7 +339,18 @@ posix_error_code AbstractFileSystem::Node::truncate(off_t newSize)
 	return 0;
 }
 
-void AbstractFileSystem::Node::setFileType(FileType type)
+
+MD5Signature AbstractFileSystem::Node::getMD5()
+{
+	return _md5;
+}
+
+void AbstractFileSystem::Node::setMD5(const MD5Signature &md5)
+{
+	_md5=md5;
+}
+
+void AbstractFileSystem::Node::setFileType(NodeType type)
 {
 	_fileType=type;
 }
@@ -380,6 +422,169 @@ void AbstractFileSystem::Node::addNext(Node *value)
 	_next.push_back(value);
 }
 
+bool AbstractFileSystem::Node::importNreplace(INode &value,const fs::path &newName,Node *toReplace)
+{
+	Node *v=dynamic_cast<Node*>(&value);
+	if(v && v==toReplace)
+		return false;
+
+	if(toReplace)
+	{
+		assert(toReplace->_parent==this);
+		// Value is from our filesystem
+		if(v && v->_tree==_tree)
+		{
+			_tree->cloudRemove(*toReplace);
+			_tree->_notifier->onNodeRemove(*toReplace);
+			auto p=toReplace->patch(*v,Field::Parent|Field::Name|Field::Id|Field::Time|Field::Content);
+			_tree->cloudUpdate(*toReplace,p);
+			_tree->_notifier->onNodeChange(*toReplace,p);
+		}
+		else
+		{
+			// TODO Make via update instead delete/create
+			auto it=std::find_if(_next.begin(),_next.end(),[&](const auto &e){ return &e==toReplace; });
+			if(it!=_next.end())
+			{
+				_tree->cloudRemove(*toReplace);
+				_tree->_notifier->onNodeRemove(*toReplace);
+				_next.erase(it);
+			}
+		}
+	}
+	uptr<Node> n(new Node(_tree,this));
+	if(newName.empty())
+		n->setName(value.getName());
+	else
+		n->setName(newName);
+	n->setFileType(value.getNodeType());
+	n->setTime(TimeAttrib::AccessTime,value.getTime(TimeAttrib::AccessTime));
+	n->setTime(TimeAttrib::ModificationTime,value.getTime(TimeAttrib::ModificationTime));
+	n->setTime(TimeAttrib::ChangeTime,value.getTime(TimeAttrib::ChangeTime));
+
+	_tree->cloudCreateMeta(*n);
+	_tree->_notifier->onNodeCreate(*n);
+	Node *nn=n.release();
+	_next.push_back(nn);
+	_tree->_notifier->onDirChange(*this,INotifier::Added,*nn);
+
+	if(value.isFolder())
+	{
+		IDirectoryIteratorPtr dirIt=value.getDirectoryIterator();
+		while(dirIt->hasNext())
+		{
+			nn->importNreplace(*dirIt->next());
+		}
+	}
+	else
+	{
+		// TODO Change open flags on something independent from POSIX
+		size_t size=value.getSize();
+		if(size)
+		{
+			uptr<IContentHandle> hSource(value.openContent(O_RDONLY));
+			uptr<IContentHandle> hDest(nn->openContent(O_CREAT));
+
+			char buf[4096];
+			off_t offset=0;
+			int readed=0;
+			while(size!=0 && (readed=hSource->read(buf,sizeof(buf),offset))!=0)
+			{
+				if(readed==-1)
+					G2F_EXCEPTION("Can't read imported file '%1'").arg(value.getName()).throwItSystem(hSource->getError());
+				offset+=readed;
+				if(hDest->write(buf,readed,offset)==-1)
+					G2F_EXCEPTION("Can't write imported file '%1'").arg(value.getName()).throwItSystem(hDest->getError());
+
+			}
+			hDest->close();
+			hSource->close();
+		}
+	}
+	return true;
+}
+
+int AbstractFileSystem::Node::patch(Node &dataSource,int patchField)
+{
+	int ret=0;
+	if(patchField & Name)
+	{
+		if(this->_name!=dataSource._name)
+		{
+			this->_name=dataSource._name;
+			ret|=Name;
+		}
+	}
+
+	if(patchField & Parent)
+	{
+		if(this->_parent!=dataSource._parent)
+		{
+			this->_parent=dataSource._parent;
+			ret|=Parent;
+		}
+	}
+
+	if(patchField & Id)
+	{
+		if(this->_id!=dataSource._id)
+		{
+			this->_id=dataSource._id;
+			ret|=Id;
+		}
+	}
+
+	if(patchField & Time)
+	{
+		if(this->_lastAccess!=dataSource._lastAccess)
+		{
+			this->_lastAccess=dataSource._lastAccess;
+			ret|=Time;
+		}
+		if(this->_lastChange!=dataSource._lastChange)
+		{
+			this->_lastChange=dataSource._lastChange;
+			ret|=Time;
+		}
+		if(this->_lastModification!=dataSource._lastModification)
+		{
+			this->_lastModification=dataSource._lastModification;
+			ret|=Time;
+		}
+	}
+
+	if(patchField & Content)
+	{
+		this->_fileType=dataSource._fileType;
+		this->_next=dataSource._next;
+		ret|=Content;
+	}
+	return ret;
+}
+
+bool AbstractFileSystem::Node::detachNode(Node *node)
+{
+	auto it=std::find_if(_next.begin(),_next.end(),[&](const auto &e){ return &e==node; });
+	if(it!=_next.end())
+	{
+		node->_parent=nullptr;
+		_next.release(it).release();
+		return true;
+	}
+	return false;
+}
+
+void AbstractFileSystem::Node::attachNode(Node *node)
+{
+	auto it=std::find_if(_next.begin(),_next.end(),[&](const auto &e){ return &e==node; });
+	if(it==_next.end())
+	{
+		node->_parent=this;
+		_next.push_back(node);
+	}
+}
+
+
 
 
 
@@ -398,8 +603,9 @@ AbstractFileSystem::AbstractFileSystem(const ContentManagerPtr &cm)
 	_cache.reset(new Cache);
 	_notifier.reset(new Notifier(this));
 	//_notifier->subscribeToContentChange(IFileSystem::INotify::OnContentChange::slot_type(&AbstractFileSystem::updateNodeContent,this));
-	_notifier->subscribeToContentChange(boost::bind(&AbstractFileSystem::updateNodeContent,this,_1));
+	_notifier->subscribeToFileContentChange(boost::bind(&AbstractFileSystem::updateNodeContent,this,_1));
 	_notifier->subscribeToNodeRemove(boost::bind(&Cache::slotNodeRemoved,_cache.get(),_1));
+	_notifier->subscribeToNodeChange(boost::bind(&Cache::slotNodeChanged,_cache.get(),_1,_2));
 	//_cManager.init(_provider->getParent()->getConfiguration()->getPaths()->getDir(IPathManager::DATA));
 }
 
@@ -430,7 +636,7 @@ void AbstractFileSystem::fillDir(Node *dir)
 }
 
 // IData interface
-IFileSystem::INotify *AbstractFileSystem::getNotifier()
+IFileSystem::INotifier *AbstractFileSystem::getNotifier()
 {
 	return _notifier.get();
 }
@@ -496,11 +702,11 @@ IFileSystem::CreateResult AbstractFileSystem::createNode(const fs::path &path,bo
 	{
 		nn=std::make_unique<Node>(this,n);
 		nn->setName(*it);
-		nn->setFileType(INode::FileType::Directory);
+		nn->setFileType(INode::NodeType::Directory);
 
 		// last entry - file or dir (depends from flag)
 		if(entries==1 && !isDirectory)
-			nn->setFileType(INode::FileType::Binary);
+			nn->setFileType(INode::NodeType::Binary);
 
 		cloudCreateMeta(*nn);
 		n->addNext(nn.get());
@@ -514,24 +720,85 @@ IFileSystem::CreateResult AbstractFileSystem::createNode(const fs::path &path,bo
 
 IFileSystem::RemoveStatus AbstractFileSystem::removeNode(const fs::path &path)
 {
-	INode *n=get(path);
-	if(!n)
+	Node *node=getNode(path,false);
+	if(!node)
 		return IFileSystem::RemoveNotFound;
-	Node *node=dynamic_cast<Node*>(n);
-	assert(node);
 	Node *parent=node->getParent();
 	if(!parent)
-		return IFileSystem::RemoveForbidden;
+		return IFileSystem::RemoveNotFound;
 	parent->removeNodes(node);
 	return IFileSystem::RemoveSuccess;
+}
+
+void AbstractFileSystem::renameNode(const boost::filesystem::path &oldPath, const boost::filesystem::path &newPath)
+{
+	Node *oldNode=getNode(oldPath,true);
+	Node *newNode=getNode(newPath,false);
+
+	Node *newParentNode=nullptr;
+	if(!newNode)
+		newParentNode=getNode(newPath.parent_path(),false);
+	else
+		newParentNode=newNode->getParent();
+	if(!newParentNode)
+		G2F_EXCEPTION("Parent path '%1' not found").arg(newPath.parent_path()).throwItSystem(ENOENT);
+
+	Node *oldParentNode=oldNode->getParent();
+	if(!oldParentNode)
+		G2F_EXCEPTION("Parent path '%1' not found").arg(oldPath.parent_path()).throwItSystem(ENOENT);
+
+	// Detach oldNode from tree
+	assert(oldParentNode->detachNode(oldNode));
+	// rename
+	oldNode->setName(newPath.filename());
+	// and attach oldNode to parent newNode and change parent information in cloud
+	newParentNode->attachNode(oldNode);
+
+	int patchFields=Node::Field::Name;
+	if(newParentNode!=oldParentNode)
+		patchFields|=Node::Field::Parent;
+	cloudUpdate(*oldNode,patchFields);
+	_notifier->onNodeChange(*oldNode,patchFields);
+
+	// then remove newNode (completely - from cloud and tree)
+	if(newNode)
+		newParentNode->removeNodes(newNode);
+
+}
+
+void AbstractFileSystem::replaceNode(const boost::filesystem::path &pathToReplace, INode &onThis)
+{
+	Node *node=getNode(pathToReplace,true);
+	Node *base=node->getParent();
+	bool changed=base->importNreplace(onThis,fs::path(),node);
+	if(changed)
+		this->_notifier->onNodeChange(*node,-1);
+}
+
+void AbstractFileSystem::insertNode(const fs::path &parentPath, INode &that)
+{
+	Node *node=getNode(parentPath,true);
+	node->importNreplace(that);
+}
+
+AbstractFileSystem::Node *AbstractFileSystem::getNode(const fs::path &path, bool throwIfMissed)
+{
+	INode *n=get(path);
+	if(!n && throwIfMissed)
+		G2F_EXCEPTION("Path '%1' not found").arg(path).throwItSystem(ENOENT);
+	if(!n)
+		return nullptr;
+	Node *ret=dynamic_cast<Node*>(n);
+	assert(ret);
+	return ret;
 }
 
 void AbstractFileSystem::updateNodeContent(INode &n)
 {
 	Node *node=dynamic_cast<Node*>(&n);
 	assert(node);
-	const ContentManager::IReaderPtr &reader=_cm->readContent(n.getId());
-	cloudUpdate(*node,nullptr,"",reader.get());
+	const ContentManager::IReaderPtr &reader=_cm->readContent(node->getId());
+	cloudUpdate(*node,{},"",reader.get());
 	cloudFetchMeta(*node);
 }
 
